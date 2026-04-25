@@ -29,7 +29,7 @@ const SPEEDS: { label: string; value: number }[] = [
   { label: "5×", value: 5 },
   { label: "30×", value: 30 },
   { label: "120×", value: 120 },
-  { label: "600×", value: 600 },
+  { label: "500", value: 500 },
 ];
 
 const DAYS: { value: ServiceDay; label: string }[] = [
