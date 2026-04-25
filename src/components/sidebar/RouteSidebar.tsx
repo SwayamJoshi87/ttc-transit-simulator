@@ -80,6 +80,20 @@ export function RouteSidebar() {
   } = useRouteStore();
   const [search, setSearch] = useState("");
   const [loadingRouteId, setLoadingRouteId] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    const key = "ttc-simulator-onboarding-seen";
+    const hasSeen = window.localStorage.getItem(key) === "1";
+    if (!hasSeen) {
+      setShowOnboarding(true);
+    }
+  }, []);
+
+  function closeOnboarding() {
+    window.localStorage.setItem("ttc-simulator-onboarding-seen", "1");
+    setShowOnboarding(false);
+  }
 
   // Load route names only. Route details are fetched lazily on click.
   useEffect(() => {
@@ -188,321 +202,372 @@ export function RouteSidebar() {
   const activeRoutesList = Array.from(activeRoutes.keys());
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b">
-        <div className="flex items-center justify-between gap-2 px-1 py-1">
-          <div className="flex flex-col">
-            <span className="font-semibold text-sm">TTC Simulator</span>
-            <span className="text-[11px] text-muted-foreground">
-              Transit route editor
-            </span>
-          </div>
-          <ThemeToggle />
-        </div>
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search routes…"
-            className="pl-7 h-8 text-xs"
-          />
-        </div>
-      </SidebarHeader>
-
-      <SidebarContent>
-        {/* Active routes summary */}
-        {activeRoutesList.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>
-              <div className="flex items-center justify-between gap-2 w-full">
-                <span className="flex items-center gap-1.5">
-                  Active
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                    {activeRoutesList.length}
-                  </Badge>
-                </span>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-7 text-[11px] px-2.5"
-                  onClick={resetAllRoutes}
-                  title="Reset all active routes"
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Reset All
-                </Button>
-              </div>
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <div className="flex flex-wrap gap-1 px-1">
-                {activeRoutesList.map((routeId) => {
-                  const route = routes.find((r) => r.routeId === routeId);
-                  if (!route) return null;
-                  const isFocused = routeId === focusedRouteId;
-                  const color = getRouteColor(route);
-                  return (
-                    <button
-                      key={routeId}
-                      onClick={() => setFocusedRoute(routeId)}
-                      className={`group flex items-center gap-1 rounded-md text-[10px] font-bold px-1.5 h-5 text-white transition-all ${
-                        isFocused
-                          ? "ring-2 ring-offset-1 ring-offset-sidebar"
-                          : "opacity-70 hover:opacity-100"
-                      }`}
-                      style={{
-                        backgroundColor: color,
-                        ...(isFocused
-                          ? { ["--tw-ring-color" as string]: color }
-                          : {}),
-                      }}
-                    >
-                      <span>{route.routeShortName}</span>
-                      <X
-                        className="h-2.5 w-2.5 opacity-60 hover:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeActiveRoute(routeId);
-                        }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {isLoading ? (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <SidebarMenuItem key={i}>
-                    <SidebarMenuSkeleton showIcon />
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ) : (
-          ROUTE_TYPE_GROUPS.map(({ type, label }) => {
-            const groupRoutes = routesByType.get(type) ?? [];
-            if (groupRoutes.length === 0) return null;
-            const Icon = TYPE_ICON[type];
-
-            return (
-              <Collapsible
-                key={type}
-                defaultOpen={type !== 3}
-                className="group/collapsible"
-              >
-                <SidebarGroup>
-                  <SidebarGroupLabel
-                    render={
-                      <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:text-sidebar-foreground" />
-                    }
-                  >
-                    <span className="flex items-center gap-2">
-                      <Icon className="h-3.5 w-3.5" />
-                      {label}
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] h-4 px-1.5"
-                      >
-                        {groupRoutes.length}
-                      </Badge>
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 transition-transform group-data-[open]/collapsible:rotate-90" />
-                  </SidebarGroupLabel>
-                  <CollapsibleContent>
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {groupRoutes.map((route) => {
-                          const isFocused = route.routeId === focusedRouteId;
-                          const isActive = activeRoutes.has(route.routeId);
-                          const isPinned = pinnedRouteIds.has(route.routeId);
-                          const color = getRouteColor(route);
-                          return (
-                            <SidebarMenuItem
-                              key={route.routeId}
-                              className="group/item relative"
-                            >
-                              <SidebarMenuButton
-                                isActive={isFocused}
-                                onClick={() => {
-                                  void activateRoute(route.routeId);
-                                }}
-                                tooltip={`${route.routeShortName} ${route.routeLongName}`}
-                                className="pr-8"
-                              >
-                                <span
-                                  className="flex items-center justify-center text-[10px] font-bold rounded-md min-w-[28px] h-5 px-1 flex-shrink-0 text-white"
-                                  style={{ backgroundColor: color }}
-                                >
-                                  {route.routeShortName}
-                                </span>
-                                <span className="truncate text-xs">
-                                  {route.routeLongName}
-                                </span>
-                              </SidebarMenuButton>
-                              {isActive && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!isPinned) {
-                                      // Pin first so we don't lose this route from the active set.
-                                      togglePin(route.routeId);
-                                    } else {
-                                      togglePin(route.routeId);
-                                    }
-                                  }}
-                                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-md transition-colors ${
-                                    isPinned
-                                      ? "text-foreground bg-accent"
-                                      : "text-muted-foreground opacity-0 group-hover/item:opacity-100 hover:bg-accent"
-                                  }`}
-                                  title={
-                                    isPinned
-                                      ? "Unpin route"
-                                      : "Pin route to keep visible"
-                                  }
-                                >
-                                  {isPinned ? (
-                                    <Pin className="h-3 w-3 fill-current" />
-                                  ) : (
-                                    <PinOff className="h-3 w-3" />
-                                  )}
-                                </button>
-                              )}
-                            </SidebarMenuItem>
-                          );
-                        })}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </CollapsibleContent>
-                </SidebarGroup>
-              </Collapsible>
-            );
-          })
-        )}
-
-        {!isLoading && filteredRoutes.length === 0 && (
-          <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-            No routes match &quot;{search}&quot;
-          </div>
-        )}
-      </SidebarContent>
-
-      {focusedRoute && focusedActive && (
-        <SidebarFooter className="border-t">
-          <div className="px-1 space-y-3">
-            <div className="flex items-center gap-2">
-              <span
-                className="flex items-center justify-center text-[10px] font-bold rounded-md min-w-[28px] h-5 px-1 flex-shrink-0 text-white"
-                style={{ backgroundColor: getRouteColor(focusedRoute) }}
-              >
-                {focusedRoute.routeShortName}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">
-                  {focusedRoute.routeLongName}
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {ROUTE_TYPE_LABEL[focusedRoute.routeType] ?? "Route"}
-                </p>
-              </div>
+    <>
+      {showOnboarding && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-background/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-xl border bg-card text-card-foreground shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-sm font-semibold">
+                Welcome to TTC Simulator
+              </h2>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => togglePin(focusedRoute.routeId)}
-                title={
-                  pinnedRouteIds.has(focusedRoute.routeId) ? "Unpin" : "Pin"
-                }
+                size="icon-xs"
+                aria-label="Close tips"
+                onClick={closeOnboarding}
               >
-                {pinnedRouteIds.has(focusedRoute.routeId) ? (
-                  <Pin className="h-3.5 w-3.5 fill-current" />
-                ) : (
-                  <PinOff className="h-3.5 w-3.5" />
-                )}
-              </Button>
-              <Button
-                variant={isStopEditMode ? "default" : "ghost"}
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setStopEditMode(!isStopEditMode)}
-                title={
-                  isStopEditMode
-                    ? "Stop dragging enabled"
-                    : "Enable stop dragging"
-                }
-              >
-                <Move className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" />
               </Button>
             </div>
 
-            {isStopEditMode && (
-              <p className="text-[10px] text-muted-foreground leading-tight">
-                Drag stop markers on the map to reposition them.
+            <div className="p-4 space-y-2 text-sm">
+              <p>It might take a little while to load GTFS route data.</p>
+              <p>
+                Use the speed dial in the time controls to speed up simulation
+                time.
               </p>
-            )}
-
-            <div>
-              <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">
-                Direction
+              <p>
+                Use the pin icon on a line to keep it visible so you can compare
+                multiple lines.
               </p>
-              <Select
-                value={focusedActive.tripId}
-                onValueChange={(v) => {
-                  if (v) changeTrip(focusedRoute.routeId, v);
-                }}
-              >
-                <SelectTrigger className="w-full text-xs h-8">
-                  <SelectValue placeholder="Select direction" />
-                </SelectTrigger>
-                <SelectContent>
-                  {focusedActive.trips.map((t) => (
-                    <SelectItem
-                      key={t.tripId}
-                      value={t.tripId}
-                      className="text-xs"
-                    >
-                      {t.tripHeadsign || `Direction ${t.directionId}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <p>
+                Use the arrow (move) icon in the route panel to edit a selected
+                line by dragging its stops.
+              </p>
+              <p>
+                Direction change is available in the <strong>Direction</strong>{" "}
+                selector for the focused route.
+              </p>
             </div>
 
-            {focusedActive.stops.length > 0 && (
-              <>
-                <Separator />
-                <div>
-                  <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">
-                    {focusedActive.stops.length} Stops
-                  </p>
-                  <ScrollArea className="h-32">
-                    <div className="space-y-0.5 pr-2">
-                      {focusedActive.stops.map((stop, i) => (
-                        <div
-                          key={`${stop.stopId}-${stop.sequence}-${i}`}
-                          className="flex items-center gap-2 text-[11px] py-0.5"
-                        >
-                          <span className="text-muted-foreground w-5 text-right flex-shrink-0">
-                            {i + 1}
-                          </span>
-                          <span className="truncate">{stop.stopName}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              </>
-            )}
+            <div className="p-4 border-t flex justify-end">
+              <Button size="sm" onClick={closeOnboarding}>
+                Got it
+              </Button>
+            </div>
           </div>
-        </SidebarFooter>
+        </div>
       )}
-    </Sidebar>
+
+      <Sidebar>
+        <SidebarHeader className="border-b">
+          <div className="flex items-center justify-between gap-2 px-1 py-1">
+            <div className="flex flex-col">
+              <span className="font-semibold text-sm">TTC Simulator</span>
+              <span className="text-[11px] text-muted-foreground">
+                Transit route editor
+              </span>
+            </div>
+            <ThemeToggle />
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search routes…"
+              className="pl-7 h-8 text-xs"
+            />
+          </div>
+        </SidebarHeader>
+
+        <SidebarContent>
+          {/* Active routes summary */}
+          {activeRoutesList.length > 0 && (
+            <SidebarGroup>
+              <SidebarGroupLabel>
+                <div className="flex items-center justify-between gap-2 w-full">
+                  <span className="flex items-center gap-1.5">
+                    Active
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] h-4 px-1.5"
+                    >
+                      {activeRoutesList.length}
+                    </Badge>
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 text-[11px] px-2.5"
+                    onClick={resetAllRoutes}
+                    title="Reset all active routes"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Reset All
+                  </Button>
+                </div>
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <div className="flex flex-wrap gap-1 px-1">
+                  {activeRoutesList.map((routeId) => {
+                    const route = routes.find((r) => r.routeId === routeId);
+                    if (!route) return null;
+                    const isFocused = routeId === focusedRouteId;
+                    const color = getRouteColor(route);
+                    return (
+                      <button
+                        key={routeId}
+                        onClick={() => setFocusedRoute(routeId)}
+                        className={`group flex items-center gap-1 rounded-md text-[10px] font-bold px-1.5 h-5 text-white transition-all ${
+                          isFocused
+                            ? "ring-2 ring-offset-1 ring-offset-sidebar"
+                            : "opacity-70 hover:opacity-100"
+                        }`}
+                        style={{
+                          backgroundColor: color,
+                          ...(isFocused
+                            ? { ["--tw-ring-color" as string]: color }
+                            : {}),
+                        }}
+                      >
+                        <span>{route.routeShortName}</span>
+                        <X
+                          className="h-2.5 w-2.5 opacity-60 hover:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeActiveRoute(routeId);
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
+
+          {isLoading ? (
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <SidebarMenuItem key={i}>
+                      <SidebarMenuSkeleton showIcon />
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ) : (
+            ROUTE_TYPE_GROUPS.map(({ type, label }) => {
+              const groupRoutes = routesByType.get(type) ?? [];
+              if (groupRoutes.length === 0) return null;
+              const Icon = TYPE_ICON[type];
+
+              return (
+                <Collapsible
+                  key={type}
+                  defaultOpen={type !== 3}
+                  className="group/collapsible"
+                >
+                  <SidebarGroup>
+                    <SidebarGroupLabel
+                      render={
+                        <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:text-sidebar-foreground" />
+                      }
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] h-4 px-1.5"
+                        >
+                          {groupRoutes.length}
+                        </Badge>
+                      </span>
+                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-data-[open]/collapsible:rotate-90" />
+                    </SidebarGroupLabel>
+                    <CollapsibleContent>
+                      <SidebarGroupContent>
+                        <SidebarMenu>
+                          {groupRoutes.map((route) => {
+                            const isFocused = route.routeId === focusedRouteId;
+                            const isActive = activeRoutes.has(route.routeId);
+                            const isPinned = pinnedRouteIds.has(route.routeId);
+                            const color = getRouteColor(route);
+                            return (
+                              <SidebarMenuItem
+                                key={route.routeId}
+                                className="group/item relative"
+                              >
+                                <SidebarMenuButton
+                                  isActive={isFocused}
+                                  onClick={() => {
+                                    void activateRoute(route.routeId);
+                                  }}
+                                  tooltip={`${route.routeShortName} ${route.routeLongName}`}
+                                  className="pr-8"
+                                >
+                                  <span
+                                    className="flex items-center justify-center text-[10px] font-bold rounded-md min-w-[28px] h-5 px-1 flex-shrink-0 text-white"
+                                    style={{ backgroundColor: color }}
+                                  >
+                                    {route.routeShortName}
+                                  </span>
+                                  <span className="truncate text-xs">
+                                    {route.routeLongName}
+                                  </span>
+                                </SidebarMenuButton>
+                                {isActive && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!isPinned) {
+                                        // Pin first so we don't lose this route from the active set.
+                                        togglePin(route.routeId);
+                                      } else {
+                                        togglePin(route.routeId);
+                                      }
+                                    }}
+                                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-md transition-colors ${
+                                      isPinned
+                                        ? "text-foreground bg-accent"
+                                        : "text-muted-foreground opacity-0 group-hover/item:opacity-100 hover:bg-accent"
+                                    }`}
+                                    title={
+                                      isPinned
+                                        ? "Unpin route"
+                                        : "Pin route to keep visible"
+                                    }
+                                  >
+                                    {isPinned ? (
+                                      <Pin className="h-3 w-3 fill-current" />
+                                    ) : (
+                                      <PinOff className="h-3 w-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </SidebarMenuItem>
+                            );
+                          })}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </CollapsibleContent>
+                  </SidebarGroup>
+                </Collapsible>
+              );
+            })
+          )}
+
+          {!isLoading && filteredRoutes.length === 0 && (
+            <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+              No routes match &quot;{search}&quot;
+            </div>
+          )}
+        </SidebarContent>
+
+        {focusedRoute && focusedActive && (
+          <SidebarFooter className="border-t">
+            <div className="px-1 space-y-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="flex items-center justify-center text-[10px] font-bold rounded-md min-w-[28px] h-5 px-1 flex-shrink-0 text-white"
+                  style={{ backgroundColor: getRouteColor(focusedRoute) }}
+                >
+                  {focusedRoute.routeShortName}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">
+                    {focusedRoute.routeLongName}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {ROUTE_TYPE_LABEL[focusedRoute.routeType] ?? "Route"}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => togglePin(focusedRoute.routeId)}
+                  title={
+                    pinnedRouteIds.has(focusedRoute.routeId) ? "Unpin" : "Pin"
+                  }
+                >
+                  {pinnedRouteIds.has(focusedRoute.routeId) ? (
+                    <Pin className="h-3.5 w-3.5 fill-current" />
+                  ) : (
+                    <PinOff className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+                <Button
+                  variant={isStopEditMode ? "default" : "ghost"}
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setStopEditMode(!isStopEditMode)}
+                  title={
+                    isStopEditMode
+                      ? "Stop dragging enabled"
+                      : "Enable stop dragging"
+                  }
+                >
+                  <Move className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {isStopEditMode && (
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  Drag stop markers on the map to reposition them.
+                </p>
+              )}
+
+              <div>
+                <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">
+                  Direction
+                </p>
+                <Select
+                  value={focusedActive.tripId}
+                  onValueChange={(v) => {
+                    if (v) changeTrip(focusedRoute.routeId, v);
+                  }}
+                >
+                  <SelectTrigger className="w-full text-xs h-8">
+                    <SelectValue placeholder="Select direction" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {focusedActive.trips.map((t) => (
+                      <SelectItem
+                        key={t.tripId}
+                        value={t.tripId}
+                        className="text-xs"
+                      >
+                        {t.tripHeadsign || `Direction ${t.directionId}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {focusedActive.stops.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">
+                      {focusedActive.stops.length} Stops
+                    </p>
+                    <ScrollArea className="h-32">
+                      <div className="space-y-0.5 pr-2">
+                        {focusedActive.stops.map((stop, i) => (
+                          <div
+                            key={`${stop.stopId}-${stop.sequence}-${i}`}
+                            className="flex items-center gap-2 text-[11px] py-0.5"
+                          >
+                            <span className="text-muted-foreground w-5 text-right flex-shrink-0">
+                              {i + 1}
+                            </span>
+                            <span className="truncate">{stop.stopName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </>
+              )}
+            </div>
+          </SidebarFooter>
+        )}
+      </Sidebar>
+    </>
   );
 }
