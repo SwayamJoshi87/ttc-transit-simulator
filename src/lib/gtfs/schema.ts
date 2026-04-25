@@ -1,4 +1,12 @@
-import { boolean, integer, pgTable, real, text } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  pgTable,
+  real,
+  serial,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 export const routesTable = pgTable("routes", {
   routeId: text("route_id").primaryKey(),
@@ -51,4 +59,12 @@ export const calendarTable = pgTable("calendar", {
   sunday: boolean("sunday").notNull(),
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
+});
+
+export const feedbackTable = pgTable("feedback", {
+  id: serial("id").primaryKey(),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });

@@ -75,6 +75,14 @@ async function ensureTables() {
   );
 
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS feedback (
+      id serial PRIMARY KEY,
+      message text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS routes (
       route_id text PRIMARY KEY,
       route_short_name text NOT NULL,

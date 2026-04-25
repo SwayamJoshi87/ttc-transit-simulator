@@ -51,6 +51,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const TYPE_ICON: Record<number, React.ComponentType<{ className?: string }>> = {
   0: TrainFront,
@@ -93,6 +101,11 @@ export function RouteSidebar() {
   function closeOnboarding() {
     window.localStorage.setItem("ttc-simulator-onboarding-seen", "1");
     setShowOnboarding(false);
+  }
+
+  function openFeedbackFromOnboarding() {
+    closeOnboarding();
+    window.dispatchEvent(new Event("open-feedback-sheet"));
   }
 
   // Load route names only. Route details are fetched lazily on click.
@@ -203,51 +216,63 @@ export function RouteSidebar() {
 
   return (
     <>
-      {showOnboarding && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-background/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border bg-card text-card-foreground shadow-xl">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-sm font-semibold">
-                Welcome to TTC Simulator
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Close tips"
-                onClick={closeOnboarding}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+      <Sheet
+        open={showOnboarding}
+        onOpenChange={(open) => !open && closeOnboarding()}
+      >
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="data-[side=bottom]:left-1/2 data-[side=bottom]:-translate-x-1/2 data-[side=bottom]:bottom-6 data-[side=bottom]:w-[min(680px,calc(100%-2rem))] data-[side=bottom]:rounded-xl data-[side=bottom]:border data-[side=bottom]:h-auto"
+        >
+          <SheetHeader>
+            <SheetTitle>Welcome to TTC Simulator</SheetTitle>
+            <SheetDescription>
+              Quick tips before you start exploring and editing routes.
+            </SheetDescription>
+          </SheetHeader>
 
-            <div className="p-4 space-y-2 text-sm">
-              <p>It might take a little while to load GTFS route data.</p>
-              <p>
-                Use the speed dial in the time controls to speed up simulation
-                time.
-              </p>
-              <p>
+          <div className="px-4 space-y-2 text-sm">
+            <p>It might take a little while to load GTFS route data.</p>
+            <p>
+              Use the speed dial in the time controls to speed up simulation
+              time.
+            </p>
+            <p className="flex items-center gap-2">
+              <Pin className="h-3.5 w-3.5" />
+              <span>
                 Use the pin icon on a line to keep it visible so you can compare
                 multiple lines.
-              </p>
-              <p>
-                Use the arrow (move) icon in the route panel to edit a selected
-                line by dragging its stops.
-              </p>
-              <p>
-                Direction change is available in the <strong>Direction</strong>{" "}
-                selector for the focused route.
-              </p>
-            </div>
-
-            <div className="p-4 border-t flex justify-end">
-              <Button size="sm" onClick={closeOnboarding}>
-                Got it
-              </Button>
-            </div>
+              </span>
+            </p>
+            <p className="flex items-center gap-2">
+              <Move className="h-3.5 w-3.5" />
+              <span>
+                Use the edit icon in the route panel to edit a selected line by
+                dragging its stops.
+              </span>
+            </p>
+            <p>
+              Direction change is available in the <strong>Direction</strong>{" "}
+              selector for the focused route.
+            </p>
+            <p className="text-muted-foreground">
+              This is a very early build, so you may run into some issues while
+              using it.
+            </p>
+            <p className="text-muted-foreground">
+              Have ideas? Please use the feedback button in the top-right.
+            </p>
           </div>
-        </div>
-      )}
+
+          <SheetFooter>
+            <Button variant="outline" onClick={openFeedbackFromOnboarding}>
+              Give feedback
+            </Button>
+            <Button onClick={closeOnboarding}>Got it</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       <Sidebar>
         <SidebarHeader className="border-b">
