@@ -8,6 +8,7 @@ import {
   Bus,
   TrainFront,
   Pin,
+  PanelLeft,
   PinOff,
   X,
   Move,
@@ -96,6 +97,12 @@ export function RouteSidebar() {
     if (!hasSeen) {
       setShowOnboarding(true);
     }
+
+    function openTutorial() {
+      setShowOnboarding(true);
+    }
+    window.addEventListener("open-tutorial", openTutorial);
+    return () => window.removeEventListener("open-tutorial", openTutorial);
   }, []);
 
   function closeOnboarding() {
@@ -232,36 +239,32 @@ export function RouteSidebar() {
             </SheetDescription>
           </SheetHeader>
 
-          <div className="px-4 space-y-2 text-sm">
-            <p>It might take a little while to load GTFS route data.</p>
-            <p>
-              Use the speed dial in the time controls to speed up simulation
-              time.
-            </p>
-            <p className="flex items-center gap-2">
-              <span>
-                Use the pin icon on a line to keep it visible so you can compare
-                multiple lines.
-              </span>
-              <Pin className="h-3.5 w-3.5" />
-            </p>
-            <p className="flex items-center gap-2">
-              <span>
-                Use the edit icon in the route panel to edit a selected line by
-                dragging its stops.
-              </span>
-              <Move className="h-3.5 w-3.5" />
-            </p>
-            <p>
-              Direction change is available in the <strong>Direction</strong>{" "}
-              selector for the focused route.
-            </p>
-            <p className="text-muted-foreground">
-              This is a very early build, so you may run into some issues while
-              using it.
-            </p>
-            <p className="text-muted-foreground">
-              Have ideas? Please use the feedback button in the top-right.
+          <div className="px-4 space-y-1.5">
+            {[
+              {
+                icon: <PanelLeft className="h-4 w-4 flex-shrink-0 mt-0.5" />,
+                text: "On mobile, tap the menu button in the top-left corner to open the route list.",
+              },
+              {
+                icon: <Pin className="h-4 w-4 flex-shrink-0 mt-0.5" />,
+                text: "Pin a route to keep it visible while you browse or compare other lines.",
+              },
+              {
+                icon: <Move className="h-4 w-4 flex-shrink-0 mt-0.5" />,
+                text: "Use the edit icon in the route panel to reposition stops by dragging them.",
+              },
+              {
+                icon: <ChevronRight className="h-4 w-4 flex-shrink-0 mt-0.5" />,
+                text: "Switch direction using the Direction selector for the focused route.",
+              },
+            ].map(({ icon, text }, i) => (
+              <div key={i} className="flex items-start gap-2.5 text-sm rounded-lg px-2 py-1.5 bg-muted/50">
+                <span className="text-muted-foreground">{icon}</span>
+                <span>{text}</span>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground pt-1 px-1">
+              Route data may take a moment to load. This is an early build — feedback is welcome via the button in the top-right.
             </p>
           </div>
 
