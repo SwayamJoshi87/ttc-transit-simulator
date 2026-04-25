@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   pgTable,
   real,
@@ -17,14 +18,18 @@ export const routesTable = pgTable("routes", {
   routeTextColor: text("route_text_color"),
 });
 
-export const tripsTable = pgTable("trips", {
-  tripId: text("trip_id").primaryKey(),
-  routeId: text("route_id").notNull(),
-  serviceId: text("service_id").notNull(),
-  tripHeadsign: text("trip_headsign").notNull(),
-  directionId: integer("direction_id"),
-  shapeId: text("shape_id").notNull(),
-});
+export const tripsTable = pgTable(
+  "trips",
+  {
+    tripId: text("trip_id").primaryKey(),
+    routeId: text("route_id").notNull(),
+    serviceId: text("service_id").notNull(),
+    tripHeadsign: text("trip_headsign").notNull(),
+    directionId: integer("direction_id"),
+    shapeId: text("shape_id").notNull(),
+  },
+  (t) => [index("trips_route_id_idx").on(t.routeId)],
+);
 
 export const stopsTable = pgTable("stops", {
   stopId: text("stop_id").primaryKey(),
@@ -33,20 +38,28 @@ export const stopsTable = pgTable("stops", {
   stopLon: real("stop_lon").notNull(),
 });
 
-export const stopTimesTable = pgTable("stop_times", {
-  tripId: text("trip_id").notNull(),
-  stopId: text("stop_id").notNull(),
-  stopSequence: integer("stop_sequence").notNull(),
-  arrivalTime: text("arrival_time").notNull(),
-  departureTime: text("departure_time").notNull(),
-});
+export const stopTimesTable = pgTable(
+  "stop_times",
+  {
+    tripId: text("trip_id").notNull(),
+    stopId: text("stop_id").notNull(),
+    stopSequence: integer("stop_sequence").notNull(),
+    arrivalTime: text("arrival_time").notNull(),
+    departureTime: text("departure_time").notNull(),
+  },
+  (t) => [index("stop_times_trip_id_idx").on(t.tripId)],
+);
 
-export const shapesTable = pgTable("shapes", {
-  shapeId: text("shape_id").notNull(),
-  shapePtLat: real("shape_pt_lat").notNull(),
-  shapePtLon: real("shape_pt_lon").notNull(),
-  shapePtSequence: integer("shape_pt_sequence").notNull(),
-});
+export const shapesTable = pgTable(
+  "shapes",
+  {
+    shapeId: text("shape_id").notNull(),
+    shapePtLat: real("shape_pt_lat").notNull(),
+    shapePtLon: real("shape_pt_lon").notNull(),
+    shapePtSequence: integer("shape_pt_sequence").notNull(),
+  },
+  (t) => [index("shapes_shape_id_idx").on(t.shapeId)],
+);
 
 export const calendarTable = pgTable("calendar", {
   serviceId: text("service_id").primaryKey(),
