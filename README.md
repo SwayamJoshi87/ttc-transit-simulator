@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TTC Transit Simulator
 
-## Getting Started
+A web app for viewing and simulating TTC (Toronto Transit Commission) transit routes on an interactive map. Select any route to see its shape, stops, and animated vehicle sprites following the real GTFS schedule.
 
-First, run the development server:
+## Features
+
+- Interactive map of all TTC routes (Subway, Streetcar, Bus)
+- Click a route to render its shape and stop list
+- Pin multiple routes simultaneously
+- Time-of-day simulation with play/pause, speed control, and day-of-week selector
+- Animated vehicle sprites interpolated from real stop_times data
+- Light / Dark / System theme
+
+## Tech Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Next.js (App Router) |
+| Map | react-leaflet + OpenStreetMap |
+| Database | PostgreSQL (Aiven) + Drizzle ORM |
+| Transit data | TTC GTFS static feed |
+| State | Zustand |
+| UI | shadcn/ui + Tailwind CSS |
+
+## Setup
+
+### 1. Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create `.env.local` in the project root:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+```
 
-## Learn More
+### 3. Seed the database
 
-To learn more about Next.js, take a look at the following resources:
+Download the TTC GTFS feed from the [TTC Open Data portal](https://open.toronto.ca/dataset/ttc-routes-and-schedules/), extract the zip, and import the CSV files into the tables defined in `src/lib/gtfs/schema.ts`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Then apply migrations:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npx drizzle-kit generate
+npx drizzle-kit migrate
+```
 
-## Deploy on Vercel
+> If `drizzle-kit migrate` hangs on large tables over a remote connection, see the workaround in [CLAUDE.md](CLAUDE.md#database-migrations).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 4. Run
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run dev    # http://localhost:3000
+npm run build
+npm run lint
+```
