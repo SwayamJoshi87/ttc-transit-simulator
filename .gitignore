@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# GTFS feed (large, downloaded manually from Toronto Open Data)
+/public/gtfs/*
+!/public/gtfs/.gitkeep
+
+# Claude project metadata
+/.claude
