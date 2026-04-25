@@ -239,18 +239,18 @@ export function RouteSidebar() {
               time.
             </p>
             <p className="flex items-center gap-2">
-              <Pin className="h-3.5 w-3.5" />
               <span>
                 Use the pin icon on a line to keep it visible so you can compare
                 multiple lines.
               </span>
+              <Pin className="h-3.5 w-3.5" />
             </p>
             <p className="flex items-center gap-2">
-              <Move className="h-3.5 w-3.5" />
               <span>
                 Use the edit icon in the route panel to edit a selected line by
                 dragging its stops.
               </span>
+              <Move className="h-3.5 w-3.5" />
             </p>
             <p>
               Direction change is available in the <strong>Direction</strong>{" "}
