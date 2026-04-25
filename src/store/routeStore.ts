@@ -32,6 +32,34 @@ export interface Trip {
   serviceId: string;
 }
 
+export interface StopTime {
+  stopId: string;
+  sequence: number;
+  arrivalSec: number;
+  departureSec: number;
+}
+
+export interface ServiceCalendar {
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+}
+
+export interface RouteCacheEntry {
+  routeId: string;
+  route: Route;
+  trips: Trip[];
+  canonicalTrips: Trip[];
+  stopsByTrip: Record<string, Stop[]>;
+  shapesByTrip: Record<string, Shape[]>;
+  stopTimesByTrip: Record<string, StopTime[]>;
+  serviceCalendarById: Record<string, ServiceCalendar>;
+}
+
 /**
  * State for one route currently shown on the map. The map renders one of these
  * for every entry in `activeRoutes`.
@@ -84,10 +112,13 @@ interface RouteStore {
   pinnedRouteIds: Set<string>;
   /** Session-only stop position edits, keyed by route and stop. */
   stopOverrides: Map<string, Map<string, StopOverride>>;
+  /** Per-route GTFS payload cache loaded on demand from API. */
+  routeCache: Map<string, RouteCacheEntry>;
   isLoading: boolean;
   isStopEditMode: boolean;
 
   setRoutes: (routes: Route[]) => void;
+  setRouteCache: (entry: RouteCacheEntry) => void;
   setLoading: (loading: boolean) => void;
   setStopEditMode: (enabled: boolean) => void;
 
@@ -124,10 +155,17 @@ export const useRouteStore = create<RouteStore>((set) => ({
   focusedRouteId: null,
   pinnedRouteIds: new Set(),
   stopOverrides: new Map(),
+  routeCache: new Map(),
   isLoading: false,
   isStopEditMode: false,
 
   setRoutes: (routes) => set({ routes }),
+  setRouteCache: (entry) =>
+    set((s) => {
+      const routeCache = new Map(s.routeCache);
+      routeCache.set(entry.routeId, entry);
+      return { routeCache };
+    }),
   setLoading: (isLoading) => set({ isLoading }),
   setStopEditMode: (isStopEditMode) => set({ isStopEditMode }),
 

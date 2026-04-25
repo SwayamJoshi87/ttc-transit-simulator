@@ -4,32 +4,21 @@ import { useMemo } from "react";
 import { CircleMarker, Tooltip } from "react-leaflet";
 import { useRouteStore } from "@/store/routeStore";
 import { useSimulationStore } from "@/store/simulationStore";
-import { useGtfs } from "@/lib/gtfs/GtfsProvider";
 import { getRouteColor } from "@/lib/routeColors";
-import {
-  getActiveServiceIds,
-  getActiveTripsForRoute,
-  getSpritePosition,
-} from "@/lib/simulation";
+import { getSpritePosition } from "@/lib/simulation";
 
 export function SimulationSprites() {
-  const { data: gtfs } = useGtfs();
   const activeRoutes = useRouteStore((s) => s.activeRoutes);
+  const routeCache = useRouteStore((s) => s.routeCache);
   const routes = useRouteStore((s) => s.routes);
   const showSprites = useSimulationStore((s) => s.showSprites);
   const currentTimeSec = useSimulationStore((s) => s.currentTimeSec);
   const serviceDay = useSimulationStore((s) => s.serviceDay);
 
-  const activeServiceIds = useMemo(
-    () =>
-      gtfs ? getActiveServiceIds(gtfs.calendar, serviceDay) : new Set<string>(),
-    [gtfs, serviceDay],
-  );
-
   // For each active route on the map, find all trips active at currentTime and
   // compute sprite positions. Recomputed every time the slider/play tick fires.
   const sprites = useMemo(() => {
-    if (!gtfs || !showSprites) return [];
+    if (!showSprites) return [];
     const out: {
       lat: number;
       lon: number;
@@ -39,28 +28,33 @@ export function SimulationSprites() {
       routeId: string;
       tripHeadsign: string;
     }[] = [];
+
     for (const active of activeRoutes.values()) {
+      const cache = routeCache.get(active.routeId);
+      if (!cache) continue;
+
       const route = routes.find((r) => r.routeId === active.routeId);
       if (!route) continue;
-      const color = getRouteColor(route);
-      const trips = getActiveTripsForRoute(
-        active.routeId,
-        currentTimeSec,
-        gtfs.trips,
-        gtfs.stopTimesByTrip,
-        activeServiceIds,
-      );
 
-      const activeStopMap = new Map(
-        active.stops.map((stop) => [stop.stopId, stop]),
-      );
-      for (const { trip, stopTimes } of trips) {
-        const pos = getSpritePosition(
-          trip,
-          stopTimes,
-          activeStopMap,
-          currentTimeSec,
-        );
+      const color = getRouteColor(route);
+
+      for (const trip of cache.trips) {
+        const calendar = cache.serviceCalendarById[trip.serviceId];
+        if (!calendar || !calendar[serviceDay]) continue;
+
+        const stopTimes = cache.stopTimesByTrip[trip.tripId] ?? [];
+        if (stopTimes.length < 2) continue;
+
+        const firstTime = stopTimes[0].arrivalSec;
+        const lastTime = stopTimes[stopTimes.length - 1].arrivalSec;
+        if (currentTimeSec < firstTime || currentTimeSec > lastTime) continue;
+
+        const stops = cache.stopsByTrip[trip.tripId] ?? active.stops;
+        if (stops.length === 0) continue;
+
+        const stopMap = new Map(stops.map((stop) => [stop.stopId, stop]));
+        const pos = getSpritePosition(trip, stopTimes, stopMap, currentTimeSec);
+
         if (!pos) continue;
         out.push({
           lat: pos.lat,
@@ -75,11 +69,11 @@ export function SimulationSprites() {
     }
     return out;
   }, [
-    gtfs,
     activeRoutes,
+    routeCache,
     routes,
     currentTimeSec,
-    activeServiceIds,
+    serviceDay,
     showSprites,
   ]);
 

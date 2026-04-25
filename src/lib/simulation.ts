@@ -1,5 +1,4 @@
-import type { CalendarService, StopTime } from "@/lib/gtfs/parser";
-import type { Trip } from "@/store/routeStore";
+import type { ServiceCalendar, StopTime, Trip } from "@/store/routeStore";
 import type { ServiceDay } from "@/store/simulationStore";
 
 export interface SpritePosition {
@@ -14,8 +13,15 @@ export interface SpritePosition {
 }
 
 /** Returns the set of service_ids that operate on the given day. */
-export function getActiveServiceIds(calendar: CalendarService[], day: ServiceDay): Set<string> {
-  return new Set(calendar.filter((c) => c[day]).map((c) => c.serviceId));
+export function getActiveServiceIds(
+  calendarByServiceId: Record<string, ServiceCalendar>,
+  day: ServiceDay,
+): Set<string> {
+  return new Set(
+    Object.entries(calendarByServiceId)
+      .filter(([, calendar]) => calendar[day])
+      .map(([serviceId]) => serviceId),
+  );
 }
 
 /**
@@ -27,7 +33,7 @@ export function getActiveTripsForRoute(
   timeSec: number,
   trips: Trip[],
   stopTimesByTrip: Map<string, StopTime[]>,
-  activeServiceIds: Set<string>
+  activeServiceIds: Set<string>,
 ): { trip: Trip; stopTimes: StopTime[] }[] {
   const result: { trip: Trip; stopTimes: StopTime[] }[] = [];
   for (const t of trips) {
@@ -58,7 +64,7 @@ export function getSpritePosition(
   trip: Trip,
   stopTimes: StopTime[],
   stopMap: Map<string, StopWithCoord>,
-  timeSec: number
+  timeSec: number,
 ): SpritePosition | null {
   // Find segment [i, i+1] such that stopTimes[i].departureSec <= T <= stopTimes[i+1].arrivalSec.
   // If T is during a dwell at a stop, position = that stop.
@@ -89,7 +95,9 @@ export function getSpritePosition(
       const frac = span > 0 ? (timeSec - a.departureSec) / span : 0;
       const lat = stopA.lat + (stopB.lat - stopA.lat) * frac;
       const lon = stopA.lon + (stopB.lon - stopA.lon) * frac;
-      const bearing = (Math.atan2(stopB.lon - stopA.lon, stopB.lat - stopA.lat) * 180) / Math.PI;
+      const bearing =
+        (Math.atan2(stopB.lon - stopA.lon, stopB.lat - stopA.lat) * 180) /
+        Math.PI;
       return {
         tripId: trip.tripId,
         routeId: trip.routeId,

@@ -14,12 +14,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useRouteStore, type Route } from "@/store/routeStore";
-import {
-  getStopsForTrip,
-  getShapesForTrip,
-  getCanonicalTrips,
-} from "@/lib/gtfs/parser";
-import { useGtfs } from "@/lib/gtfs/GtfsProvider";
+import { fetchRouteDetails, fetchRouteList } from "@/lib/gtfs/api";
 import {
   getRouteColor,
   ROUTE_TYPE_GROUPS,
@@ -67,11 +62,13 @@ export function RouteSidebar() {
   const {
     routes,
     activeRoutes,
+    routeCache,
     focusedRouteId,
     pinnedRouteIds,
     isLoading,
     isStopEditMode,
     setRoutes,
+    setRouteCache,
     setLoading,
     setStopEditMode,
     setActiveRoute,
@@ -81,59 +78,84 @@ export function RouteSidebar() {
     removeActiveRoute,
     resetAllRoutes,
   } = useRouteStore();
-
-  const { data: gtfs, isLoading: gtfsLoading } = useGtfs();
   const [search, setSearch] = useState("");
+  const [loadingRouteId, setLoadingRouteId] = useState<string | null>(null);
 
-  // Push GTFS routes into the store once they load.
+  // Load route names only. Route details are fetched lazily on click.
   useEffect(() => {
-    setLoading(gtfsLoading);
-    if (!gtfs) return;
-    setRoutes(
-      [...gtfs.routes].sort((a, b) => {
-        const aNum = parseInt(a.routeShortName);
-        const bNum = parseInt(b.routeShortName);
-        if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
-        return a.routeShortName.localeCompare(b.routeShortName);
-      }),
-    );
-  }, [gtfs, gtfsLoading, setRoutes, setLoading]);
+    let cancelled = false;
 
-  function activateRoute(routeId: string) {
-    if (!gtfs) return;
+    setLoading(true);
+    fetchRouteList()
+      .then((fetchedRoutes) => {
+        if (cancelled) return;
+        setRoutes(
+          [...fetchedRoutes].sort((a, b) => {
+            const aNum = parseInt(a.routeShortName);
+            const bNum = parseInt(b.routeShortName);
+            if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+            return a.routeShortName.localeCompare(b.routeShortName);
+          }),
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRoutes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setRoutes, setLoading]);
+
+  async function activateRoute(routeId: string) {
     // Already active — just focus.
     if (activeRoutes.has(routeId)) {
       setFocusedRoute(routeId);
       return;
     }
-    const allTrips = gtfs.trips.filter((t) => t.routeId === routeId);
-    const canonical = getCanonicalTrips(allTrips, gtfs.stopTimesByTrip);
+
+    if (loadingRouteId === routeId) return;
+
+    let cached = routeCache.get(routeId);
+    if (!cached) {
+      setLoadingRouteId(routeId);
+      try {
+        cached = await fetchRouteDetails(routeId);
+        setRouteCache(cached);
+      } catch {
+        return;
+      } finally {
+        setLoadingRouteId((current) => (current === routeId ? null : current));
+      }
+    }
+
+    if (!cached) return;
     const firstTrip =
-      canonical.find((t) => t.directionId === 0) ?? canonical[0];
+      cached.canonicalTrips.find((t) => t.directionId === 0) ??
+      cached.canonicalTrips[0];
     if (!firstTrip) return;
-    const stops = getStopsForTrip(
-      firstTrip.tripId,
-      gtfs.stopTimesByTrip,
-      gtfs.stopMap,
-    );
-    const shapes = getShapesForTrip(firstTrip.shapeId, gtfs.shapesByShapeId);
+
+    const stops = cached.stopsByTrip[firstTrip.tripId] ?? [];
+    const shapes = cached.shapesByTrip[firstTrip.tripId] ?? [];
+
     setActiveRoute({
       routeId,
       tripId: firstTrip.tripId,
-      trips: canonical,
+      trips: cached.canonicalTrips,
       stops,
       shapes,
     });
   }
 
   function changeTrip(routeId: string, tripId: string) {
-    if (!gtfs) return;
-    const active = activeRoutes.get(routeId);
-    if (!active) return;
-    const trip = active.trips.find((t) => t.tripId === tripId);
-    if (!trip) return;
-    const stops = getStopsForTrip(tripId, gtfs.stopTimesByTrip, gtfs.stopMap);
-    const shapes = getShapesForTrip(trip.shapeId, gtfs.shapesByShapeId);
+    const cached = routeCache.get(routeId);
+    if (!cached) return;
+    const stops = cached.stopsByTrip[tripId] ?? [];
+    const shapes = cached.shapesByTrip[tripId] ?? [];
     setActiveTrip(routeId, tripId, stops, shapes);
   }
 
@@ -308,7 +330,9 @@ export function RouteSidebar() {
                             >
                               <SidebarMenuButton
                                 isActive={isFocused}
-                                onClick={() => activateRoute(route.routeId)}
+                                onClick={() => {
+                                  void activateRoute(route.routeId);
+                                }}
                                 tooltip={`${route.routeShortName} ${route.routeLongName}`}
                                 className="pr-8"
                               >

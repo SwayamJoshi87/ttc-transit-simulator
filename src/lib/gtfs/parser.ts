@@ -1,13 +1,5 @@
 import Papa from "papaparse";
-import type { Route, Trip, Stop, Shape } from "@/store/routeStore";
-
-export interface StopTime {
-  stopId: string;
-  sequence: number;
-  /** Seconds since service-day start (00:00). Can exceed 86400 for after-midnight trips. */
-  arrivalSec: number;
-  departureSec: number;
-}
+import type { Route, Trip, Stop, Shape, StopTime } from "@/store/routeStore";
 
 export interface CalendarService {
   serviceId: string;
@@ -19,7 +11,7 @@ export interface CalendarService {
   saturday: boolean;
   sunday: boolean;
   startDate: string; // YYYYMMDD
-  endDate: string;   // YYYYMMDD
+  endDate: string; // YYYYMMDD
 }
 
 async function fetchAndParse(url: string): Promise<Record<string, string>[]> {
@@ -39,20 +31,23 @@ async function fetchAndParse(url: string): Promise<Record<string, string>[]> {
 export function parseGtfsTime(t: string): number {
   const parts = t.split(":");
   if (parts.length !== 3) return 0;
-  return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+  return (
+    parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2])
+  );
 }
 
 export async function loadGTFS() {
   const base = "/gtfs";
 
-  const [rawRoutes, rawTrips, rawStops, rawStopTimes, rawShapes, rawCalendar] = await Promise.all([
-    fetchAndParse(`${base}/routes.txt`),
-    fetchAndParse(`${base}/trips.txt`),
-    fetchAndParse(`${base}/stops.txt`),
-    fetchAndParse(`${base}/stop_times.txt`),
-    fetchAndParse(`${base}/shapes.txt`),
-    fetchAndParse(`${base}/calendar.txt`),
-  ]);
+  const [rawRoutes, rawTrips, rawStops, rawStopTimes, rawShapes, rawCalendar] =
+    await Promise.all([
+      fetchAndParse(`${base}/routes.txt`),
+      fetchAndParse(`${base}/trips.txt`),
+      fetchAndParse(`${base}/stops.txt`),
+      fetchAndParse(`${base}/stop_times.txt`),
+      fetchAndParse(`${base}/shapes.txt`),
+      fetchAndParse(`${base}/calendar.txt`),
+    ]);
 
   const routes: Route[] = rawRoutes.map((r) => ({
     routeId: r.route_id,
@@ -75,8 +70,13 @@ export async function loadGTFS() {
   const stopMap = new Map(
     rawStops.map((s) => [
       s.stop_id,
-      { stopId: s.stop_id, stopName: s.stop_name, lat: parseFloat(s.stop_lat), lon: parseFloat(s.stop_lon) },
-    ])
+      {
+        stopId: s.stop_id,
+        stopName: s.stop_name,
+        lat: parseFloat(s.stop_lat),
+        lon: parseFloat(s.stop_lon),
+      },
+    ]),
   );
 
   const stopTimesByTrip = new Map<string, StopTime[]>();
@@ -98,7 +98,11 @@ export async function loadGTFS() {
   const shapesByShapeId = new Map<string, Shape[]>();
   for (const s of rawShapes) {
     const arr = shapesByShapeId.get(s.shape_id) ?? [];
-    arr.push({ lat: parseFloat(s.shape_pt_lat), lon: parseFloat(s.shape_pt_lon), sequence: parseInt(s.shape_pt_sequence) });
+    arr.push({
+      lat: parseFloat(s.shape_pt_lat),
+      lon: parseFloat(s.shape_pt_lon),
+      sequence: parseInt(s.shape_pt_sequence),
+    });
     shapesByShapeId.set(s.shape_id, arr);
   }
   for (const arr of shapesByShapeId.values()) {
@@ -124,7 +128,10 @@ export async function loadGTFS() {
 export function getStopsForTrip(
   tripId: string,
   stopTimesByTrip: Map<string, StopTime[]>,
-  stopMap: Map<string, { stopId: string; stopName: string; lat: number; lon: number }>
+  stopMap: Map<
+    string,
+    { stopId: string; stopName: string; lat: number; lon: number }
+  >,
 ): Stop[] {
   const times = stopTimesByTrip.get(tripId) ?? [];
   return times.flatMap((t) => {
@@ -135,7 +142,7 @@ export function getStopsForTrip(
 
 export function getShapesForTrip(
   shapeId: string,
-  shapesByShapeId: Map<string, Shape[]>
+  shapesByShapeId: Map<string, Shape[]>,
 ): Shape[] {
   return shapesByShapeId.get(shapeId) ?? [];
 }
@@ -146,7 +153,7 @@ export function getShapesForTrip(
  */
 export function getCanonicalTrips(
   trips: Trip[],
-  stopTimesByTrip: Map<string, StopTime[]>
+  stopTimesByTrip: Map<string, StopTime[]>,
 ): Trip[] {
   const groups = new Map<string, Trip[]>();
   for (const t of trips) {
@@ -156,11 +163,14 @@ export function getCanonicalTrips(
     groups.set(key, arr);
   }
 
-  const stopCount = (tripId: string) => stopTimesByTrip.get(tripId)?.length ?? 0;
+  const stopCount = (tripId: string) =>
+    stopTimesByTrip.get(tripId)?.length ?? 0;
 
   return Array.from(groups.values())
     .map((group) =>
-      group.reduce((longest, t) => (stopCount(t.tripId) > stopCount(longest.tripId) ? t : longest))
+      group.reduce((longest, t) =>
+        stopCount(t.tripId) > stopCount(longest.tripId) ? t : longest,
+      ),
     )
     .sort((a, b) => a.directionId - b.directionId);
 }
