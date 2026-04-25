@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import { useRouteStore } from "@/store/routeStore";
 import { getRouteColor } from "@/lib/routeColors";
 import { RouteLayer } from "./RouteLayer";
+import { SimulationSprites } from "./SimulationSprites";
 import "leaflet/dist/leaflet.css";
 
 const TORONTO_CENTER: [number, number] = [43.7, -79.42];
@@ -76,6 +77,8 @@ export default function TransitMap() {
           />
         );
       })}
+
+      <SimulationSprites />
     </MapContainer>
   );
 }
