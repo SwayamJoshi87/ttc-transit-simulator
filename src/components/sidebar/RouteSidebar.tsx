@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Select,
   SelectContent,
@@ -51,7 +52,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sheet,
   SheetContent,
@@ -555,11 +555,7 @@ export function RouteSidebar() {
                   </SelectTrigger>
                   <SelectContent>
                     {focusedActive.trips.map((t) => (
-                      <SelectItem
-                        key={t.tripId}
-                        value={t.tripId}
-                        className="text-xs"
-                      >
+                      <SelectItem key={t.tripId} value={t.tripId} className="text-xs">
                         {t.tripHeadsign || `Direction ${t.directionId}`}
                       </SelectItem>
                     ))}

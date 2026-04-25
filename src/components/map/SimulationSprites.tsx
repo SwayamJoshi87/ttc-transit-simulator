@@ -38,7 +38,18 @@ export function SimulationSprites() {
 
       const color = getRouteColor(route);
 
+      // Only show sprites for the selected direction to avoid showing both
+      // directions at once and to prevent stale-path artifacts when the user
+      // switches direction (non-canonical trips fall back to active.stops which
+      // would be wrong for the opposite direction).
+      const selectedCanonical = active.trips.find(
+        (t) => t.tripId === active.tripId,
+      );
+      const selectedDirectionId = selectedCanonical?.directionId ?? 0;
+
       for (const trip of cache.trips) {
+        if (trip.directionId !== selectedDirectionId) continue;
+
         const calendar = cache.serviceCalendarById[trip.serviceId];
         if (!calendar || !calendar[serviceDay]) continue;
 
@@ -49,10 +60,10 @@ export function SimulationSprites() {
         const lastTime = stopTimes[stopTimes.length - 1].arrivalSec;
         if (currentTimeSec < firstTime || currentTimeSec > lastTime) continue;
 
-        const stops = cache.stopsByTrip[trip.tripId] ?? active.stops;
-        if (stops.length === 0) continue;
-
-        const stopMap = new Map(stops.map((stop) => [stop.stopId, stop]));
+        // Always use active.stops — it has drag overrides applied and covers
+        // all stop IDs for this direction (canonical trip is the longest).
+        if (active.stops.length === 0) continue;
+        const stopMap = new Map(active.stops.map((stop) => [stop.stopId, stop]));
         const pos = getSpritePosition(trip, stopTimes, stopMap, currentTimeSec);
 
         if (!pos) continue;
