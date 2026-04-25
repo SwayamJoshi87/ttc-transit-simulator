@@ -67,14 +67,20 @@ export function FeedbackWidget() {
   }
 
   return (
-    <div className="absolute top-3 right-3 z-[1000]">
+    <div
+      className="absolute z-[1000]"
+      style={{
+        top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)",
+        right: "calc(env(safe-area-inset-right, 0px) + 0.75rem)",
+      }}
+    >
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger
           render={
             <Button
               variant="outline"
               size="sm"
-              className="bg-background/95 backdrop-blur shadow-md"
+              className="h-9 rounded-full bg-background/95 px-3 backdrop-blur shadow-lg md:h-8 md:rounded-md"
             />
           }
         >

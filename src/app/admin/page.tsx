@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { desc } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -10,6 +11,12 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 const ADMIN_PASSWORD = "sway@8735";
 const ADMIN_COOKIE_NAME = "ttc-admin-auth";
