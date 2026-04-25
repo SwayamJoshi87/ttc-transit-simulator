@@ -1,6 +1,13 @@
 import { create } from "zustand";
 
-export type ServiceDay = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+export type ServiceDay =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
 
 interface SimulationStore {
   /** Seconds since service-day start (00:00). 0–86400+ (can be after midnight). */
@@ -21,6 +28,8 @@ interface SimulationStore {
   setShowSprites: (show: boolean) => void;
   /** Snap to current real-world Toronto time. */
   resetToNow: () => void;
+  /** Client-only initialization to avoid SSR hydration mismatch. */
+  initializeFromNow: () => void;
 }
 
 /**
@@ -36,23 +45,30 @@ export function getNowSecondsToronto(): number {
     second: "2-digit",
   });
   const parts = formatter.formatToParts(new Date());
-  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
+  const get = (type: string) =>
+    parseInt(parts.find((p) => p.type === type)?.value ?? "0");
   // "24" can appear in some Intl impls instead of "00" at midnight; normalize.
   const h = get("hour") % 24;
   return h * 3600 + get("minute") * 60 + get("second");
 }
 
 export function getCurrentServiceDayToronto(): ServiceDay {
-  const formatter = new Intl.DateTimeFormat("en-US", { timeZone: "America/Toronto", weekday: "long" });
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Toronto",
+    weekday: "long",
+  });
   const day = formatter.format(new Date()).toLowerCase();
   return day as ServiceDay;
 }
 
+const DEFAULT_TIME_SEC = 12 * 3600;
+const DEFAULT_SERVICE_DAY: ServiceDay = "monday";
+
 export const useSimulationStore = create<SimulationStore>((set) => ({
-  currentTimeSec: getNowSecondsToronto(),
+  currentTimeSec: DEFAULT_TIME_SEC,
   isPlaying: false,
   speed: 30, // 30× by default — enough to see movement without losing all anchoring to real time
-  serviceDay: getCurrentServiceDayToronto(),
+  serviceDay: DEFAULT_SERVICE_DAY,
   showSprites: true,
 
   setCurrentTime: (sec) => set({ currentTimeSec: Math.max(0, sec) }),
@@ -70,7 +86,24 @@ export const useSimulationStore = create<SimulationStore>((set) => ({
   setServiceDay: (serviceDay) => set({ serviceDay }),
   setShowSprites: (showSprites) => set({ showSprites }),
   resetToNow: () =>
-    set({ currentTimeSec: getNowSecondsToronto(), serviceDay: getCurrentServiceDayToronto() }),
+    set({
+      currentTimeSec: getNowSecondsToronto(),
+      serviceDay: getCurrentServiceDayToronto(),
+    }),
+  initializeFromNow: () =>
+    set((s) => {
+      // Initialize once per page load; keep user changes afterwards.
+      if (
+        s.currentTimeSec !== DEFAULT_TIME_SEC ||
+        s.serviceDay !== DEFAULT_SERVICE_DAY
+      ) {
+        return s;
+      }
+      return {
+        currentTimeSec: getNowSecondsToronto(),
+        serviceDay: getCurrentServiceDayToronto(),
+      };
+    }),
 }));
 
 /** Format seconds-since-midnight as "HH:MM" (or "HH:MM AM/PM" if 12h). */

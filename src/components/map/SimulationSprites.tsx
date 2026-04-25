@@ -6,7 +6,11 @@ import { useRouteStore } from "@/store/routeStore";
 import { useSimulationStore } from "@/store/simulationStore";
 import { useGtfs } from "@/lib/gtfs/GtfsProvider";
 import { getRouteColor } from "@/lib/routeColors";
-import { getActiveServiceIds, getActiveTripsForRoute, getSpritePosition } from "@/lib/simulation";
+import {
+  getActiveServiceIds,
+  getActiveTripsForRoute,
+  getSpritePosition,
+} from "@/lib/simulation";
 
 export function SimulationSprites() {
   const { data: gtfs } = useGtfs();
@@ -17,15 +21,24 @@ export function SimulationSprites() {
   const serviceDay = useSimulationStore((s) => s.serviceDay);
 
   const activeServiceIds = useMemo(
-    () => (gtfs ? getActiveServiceIds(gtfs.calendar, serviceDay) : new Set<string>()),
-    [gtfs, serviceDay]
+    () =>
+      gtfs ? getActiveServiceIds(gtfs.calendar, serviceDay) : new Set<string>(),
+    [gtfs, serviceDay],
   );
 
   // For each active route on the map, find all trips active at currentTime and
   // compute sprite positions. Recomputed every time the slider/play tick fires.
   const sprites = useMemo(() => {
     if (!gtfs || !showSprites) return [];
-    const out: { lat: number; lon: number; color: string; routeShortName: string; tripId: string; routeId: string; tripHeadsign: string }[] = [];
+    const out: {
+      lat: number;
+      lon: number;
+      color: string;
+      routeShortName: string;
+      tripId: string;
+      routeId: string;
+      tripHeadsign: string;
+    }[] = [];
     for (const active of activeRoutes.values()) {
       const route = routes.find((r) => r.routeId === active.routeId);
       if (!route) continue;
@@ -35,10 +48,19 @@ export function SimulationSprites() {
         currentTimeSec,
         gtfs.trips,
         gtfs.stopTimesByTrip,
-        activeServiceIds
+        activeServiceIds,
+      );
+
+      const activeStopMap = new Map(
+        active.stops.map((stop) => [stop.stopId, stop]),
       );
       for (const { trip, stopTimes } of trips) {
-        const pos = getSpritePosition(trip, stopTimes, gtfs.stopMap, currentTimeSec);
+        const pos = getSpritePosition(
+          trip,
+          stopTimes,
+          activeStopMap,
+          currentTimeSec,
+        );
         if (!pos) continue;
         out.push({
           lat: pos.lat,
@@ -52,7 +74,14 @@ export function SimulationSprites() {
       }
     }
     return out;
-  }, [gtfs, activeRoutes, routes, currentTimeSec, activeServiceIds, showSprites]);
+  }, [
+    gtfs,
+    activeRoutes,
+    routes,
+    currentTimeSec,
+    activeServiceIds,
+    showSprites,
+  ]);
 
   if (!showSprites) return null;
 
@@ -74,7 +103,11 @@ export function SimulationSprites() {
           <Tooltip>
             <div className="text-[11px]">
               <span className="font-bold">{s.routeShortName}</span>
-              {s.tripHeadsign && <span className="ml-1 text-muted-foreground">→ {s.tripHeadsign}</span>}
+              {s.tripHeadsign && (
+                <span className="ml-1 text-muted-foreground">
+                  → {s.tripHeadsign}
+                </span>
+              )}
             </div>
           </Tooltip>
         </CircleMarker>

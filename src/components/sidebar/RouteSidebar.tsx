@@ -1,11 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Search, Train, Bus, TrainFront, Pin, PinOff, X } from "lucide-react";
+import {
+  ChevronRight,
+  Search,
+  Train,
+  Bus,
+  TrainFront,
+  Pin,
+  PinOff,
+  X,
+  Move,
+  RotateCcw,
+} from "lucide-react";
 import { useRouteStore, type Route } from "@/store/routeStore";
-import { getStopsForTrip, getShapesForTrip, getCanonicalTrips } from "@/lib/gtfs/parser";
+import {
+  getStopsForTrip,
+  getShapesForTrip,
+  getCanonicalTrips,
+} from "@/lib/gtfs/parser";
 import { useGtfs } from "@/lib/gtfs/GtfsProvider";
-import { getRouteColor, ROUTE_TYPE_GROUPS, ROUTE_TYPE_LABEL } from "@/lib/routeColors";
+import {
+  getRouteColor,
+  ROUTE_TYPE_GROUPS,
+  ROUTE_TYPE_LABEL,
+} from "@/lib/routeColors";
 import {
   Sidebar,
   SidebarContent,
@@ -19,7 +38,11 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -47,13 +70,16 @@ export function RouteSidebar() {
     focusedRouteId,
     pinnedRouteIds,
     isLoading,
+    isStopEditMode,
     setRoutes,
     setLoading,
+    setStopEditMode,
     setActiveRoute,
     setFocusedRoute,
     setActiveTrip,
     togglePin,
     removeActiveRoute,
+    resetAllRoutes,
   } = useRouteStore();
 
   const { data: gtfs, isLoading: gtfsLoading } = useGtfs();
@@ -69,7 +95,7 @@ export function RouteSidebar() {
         const bNum = parseInt(b.routeShortName);
         if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
         return a.routeShortName.localeCompare(b.routeShortName);
-      })
+      }),
     );
   }, [gtfs, gtfsLoading, setRoutes, setLoading]);
 
@@ -82,9 +108,14 @@ export function RouteSidebar() {
     }
     const allTrips = gtfs.trips.filter((t) => t.routeId === routeId);
     const canonical = getCanonicalTrips(allTrips, gtfs.stopTimesByTrip);
-    const firstTrip = canonical.find((t) => t.directionId === 0) ?? canonical[0];
+    const firstTrip =
+      canonical.find((t) => t.directionId === 0) ?? canonical[0];
     if (!firstTrip) return;
-    const stops = getStopsForTrip(firstTrip.tripId, gtfs.stopTimesByTrip, gtfs.stopMap);
+    const stops = getStopsForTrip(
+      firstTrip.tripId,
+      gtfs.stopTimesByTrip,
+      gtfs.stopMap,
+    );
     const shapes = getShapesForTrip(firstTrip.shapeId, gtfs.shapesByShapeId);
     setActiveRoute({
       routeId,
@@ -112,7 +143,7 @@ export function RouteSidebar() {
     return routes.filter(
       (r) =>
         r.routeShortName.toLowerCase().includes(q) ||
-        r.routeLongName.toLowerCase().includes(q)
+        r.routeLongName.toLowerCase().includes(q),
     );
   }, [routes, search]);
 
@@ -126,8 +157,12 @@ export function RouteSidebar() {
     return map;
   }, [filteredRoutes]);
 
-  const focusedRoute = focusedRouteId ? routes.find((r) => r.routeId === focusedRouteId) : null;
-  const focusedActive = focusedRouteId ? activeRoutes.get(focusedRouteId) : null;
+  const focusedRoute = focusedRouteId
+    ? routes.find((r) => r.routeId === focusedRouteId)
+    : null;
+  const focusedActive = focusedRouteId
+    ? activeRoutes.get(focusedRouteId)
+    : null;
   const activeRoutesList = Array.from(activeRoutes.keys());
 
   return (
@@ -136,7 +171,9 @@ export function RouteSidebar() {
         <div className="flex items-center justify-between gap-2 px-1 py-1">
           <div className="flex flex-col">
             <span className="font-semibold text-sm">TTC Simulator</span>
-            <span className="text-[11px] text-muted-foreground">Transit route editor</span>
+            <span className="text-[11px] text-muted-foreground">
+              Transit route editor
+            </span>
           </div>
           <ThemeToggle />
         </div>
@@ -156,12 +193,24 @@ export function RouteSidebar() {
         {activeRoutesList.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>
-              <span className="flex items-center gap-1.5">
-                Active
-                <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                  {activeRoutesList.length}
-                </Badge>
-              </span>
+              <div className="flex items-center justify-between gap-2 w-full">
+                <span className="flex items-center gap-1.5">
+                  Active
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                    {activeRoutesList.length}
+                  </Badge>
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 text-[11px] px-2.5"
+                  onClick={resetAllRoutes}
+                  title="Reset all active routes"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset All
+                </Button>
+              </div>
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <div className="flex flex-wrap gap-1 px-1">
@@ -175,9 +224,16 @@ export function RouteSidebar() {
                       key={routeId}
                       onClick={() => setFocusedRoute(routeId)}
                       className={`group flex items-center gap-1 rounded-md text-[10px] font-bold px-1.5 h-5 text-white transition-all ${
-                        isFocused ? "ring-2 ring-offset-1 ring-offset-sidebar" : "opacity-70 hover:opacity-100"
+                        isFocused
+                          ? "ring-2 ring-offset-1 ring-offset-sidebar"
+                          : "opacity-70 hover:opacity-100"
                       }`}
-                      style={{ backgroundColor: color, ...(isFocused ? { ["--tw-ring-color" as string]: color } : {}) }}
+                      style={{
+                        backgroundColor: color,
+                        ...(isFocused
+                          ? { ["--tw-ring-color" as string]: color }
+                          : {}),
+                      }}
                     >
                       <span>{route.routeShortName}</span>
                       <X
@@ -214,7 +270,11 @@ export function RouteSidebar() {
             const Icon = TYPE_ICON[type];
 
             return (
-              <Collapsible key={type} defaultOpen={type !== 3} className="group/collapsible">
+              <Collapsible
+                key={type}
+                defaultOpen={type !== 3}
+                className="group/collapsible"
+              >
                 <SidebarGroup>
                   <SidebarGroupLabel
                     render={
@@ -224,7 +284,10 @@ export function RouteSidebar() {
                     <span className="flex items-center gap-2">
                       <Icon className="h-3.5 w-3.5" />
                       {label}
-                      <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] h-4 px-1.5"
+                      >
                         {groupRoutes.length}
                       </Badge>
                     </span>
@@ -239,7 +302,10 @@ export function RouteSidebar() {
                           const isPinned = pinnedRouteIds.has(route.routeId);
                           const color = getRouteColor(route);
                           return (
-                            <SidebarMenuItem key={route.routeId} className="group/item relative">
+                            <SidebarMenuItem
+                              key={route.routeId}
+                              className="group/item relative"
+                            >
                               <SidebarMenuButton
                                 isActive={isFocused}
                                 onClick={() => activateRoute(route.routeId)}
@@ -252,7 +318,9 @@ export function RouteSidebar() {
                                 >
                                   {route.routeShortName}
                                 </span>
-                                <span className="truncate text-xs">{route.routeLongName}</span>
+                                <span className="truncate text-xs">
+                                  {route.routeLongName}
+                                </span>
                               </SidebarMenuButton>
                               {isActive && (
                                 <button
@@ -270,9 +338,17 @@ export function RouteSidebar() {
                                       ? "text-foreground bg-accent"
                                       : "text-muted-foreground opacity-0 group-hover/item:opacity-100 hover:bg-accent"
                                   }`}
-                                  title={isPinned ? "Unpin route" : "Pin route to keep visible"}
+                                  title={
+                                    isPinned
+                                      ? "Unpin route"
+                                      : "Pin route to keep visible"
+                                  }
                                 >
-                                  {isPinned ? <Pin className="h-3 w-3 fill-current" /> : <PinOff className="h-3 w-3" />}
+                                  {isPinned ? (
+                                    <Pin className="h-3 w-3 fill-current" />
+                                  ) : (
+                                    <PinOff className="h-3 w-3" />
+                                  )}
                                 </button>
                               )}
                             </SidebarMenuItem>
@@ -305,7 +381,9 @@ export function RouteSidebar() {
                 {focusedRoute.routeShortName}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{focusedRoute.routeLongName}</p>
+                <p className="text-xs font-medium truncate">
+                  {focusedRoute.routeLongName}
+                </p>
                 <p className="text-[10px] text-muted-foreground">
                   {ROUTE_TYPE_LABEL[focusedRoute.routeType] ?? "Route"}
                 </p>
@@ -315,7 +393,9 @@ export function RouteSidebar() {
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => togglePin(focusedRoute.routeId)}
-                title={pinnedRouteIds.has(focusedRoute.routeId) ? "Unpin" : "Pin"}
+                title={
+                  pinnedRouteIds.has(focusedRoute.routeId) ? "Unpin" : "Pin"
+                }
               >
                 {pinnedRouteIds.has(focusedRoute.routeId) ? (
                   <Pin className="h-3.5 w-3.5 fill-current" />
@@ -323,7 +403,26 @@ export function RouteSidebar() {
                   <PinOff className="h-3.5 w-3.5" />
                 )}
               </Button>
+              <Button
+                variant={isStopEditMode ? "default" : "ghost"}
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setStopEditMode(!isStopEditMode)}
+                title={
+                  isStopEditMode
+                    ? "Stop dragging enabled"
+                    : "Enable stop dragging"
+                }
+              >
+                <Move className="h-3.5 w-3.5" />
+              </Button>
             </div>
+
+            {isStopEditMode && (
+              <p className="text-[10px] text-muted-foreground leading-tight">
+                Drag stop markers on the map to reposition them.
+              </p>
+            )}
 
             <div>
               <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">
@@ -340,7 +439,11 @@ export function RouteSidebar() {
                 </SelectTrigger>
                 <SelectContent>
                   {focusedActive.trips.map((t) => (
-                    <SelectItem key={t.tripId} value={t.tripId} className="text-xs">
+                    <SelectItem
+                      key={t.tripId}
+                      value={t.tripId}
+                      className="text-xs"
+                    >
                       {t.tripHeadsign || `Direction ${t.directionId}`}
                     </SelectItem>
                   ))}
@@ -358,7 +461,10 @@ export function RouteSidebar() {
                   <ScrollArea className="h-32">
                     <div className="space-y-0.5 pr-2">
                       {focusedActive.stops.map((stop, i) => (
-                        <div key={stop.stopId} className="flex items-center gap-2 text-[11px] py-0.5">
+                        <div
+                          key={`${stop.stopId}-${stop.sequence}-${i}`}
+                          className="flex items-center gap-2 text-[11px] py-0.5"
+                        >
                           <span className="text-muted-foreground w-5 text-right flex-shrink-0">
                             {i + 1}
                           </span>

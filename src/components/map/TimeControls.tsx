@@ -2,11 +2,21 @@
 
 import { useEffect } from "react";
 import { Play, Pause, Clock, Calendar, Sparkles } from "lucide-react";
-import { useSimulationStore, formatTimeOfDay, type ServiceDay } from "@/store/simulationStore";
+import {
+  useSimulationStore,
+  formatTimeOfDay,
+  type ServiceDay,
+} from "@/store/simulationStore";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +60,12 @@ export function TimeControls() {
     setServiceDay,
     setShowSprites,
     resetToNow,
+    initializeFromNow,
   } = useSimulationStore();
+
+  useEffect(() => {
+    initializeFromNow();
+  }, [initializeFromNow]);
 
   // Tick: when playing, advance simulation time on rAF.
   useEffect(() => {
@@ -73,8 +88,17 @@ export function TimeControls() {
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-[min(720px,calc(100%-2rem))] rounded-lg border bg-background/95 backdrop-blur shadow-lg p-3">
       <div className="flex items-center gap-2 mb-2">
-        <Button size="icon" variant="default" className="h-8 w-8 flex-shrink-0" onClick={togglePlay}>
-          {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        <Button
+          size="icon"
+          variant="default"
+          className="h-8 w-8 flex-shrink-0"
+          onClick={togglePlay}
+        >
+          {isPlaying ? (
+            <Pause className="h-3.5 w-3.5" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
         </Button>
 
         <div className="flex flex-col flex-1 min-w-0">
@@ -82,7 +106,9 @@ export function TimeControls() {
             <span className="text-sm font-mono font-medium tabular-nums">
               {formatTimeOfDay(currentTimeSec, true)}
             </span>
-            <span className="text-[10px] text-muted-foreground capitalize">{serviceDay}</span>
+            <span className="text-[10px] text-muted-foreground capitalize">
+              {serviceDay}
+            </span>
           </div>
           <Slider
             value={[sliderValue]}
@@ -111,14 +137,27 @@ export function TimeControls() {
       <div className="flex items-center gap-3 flex-wrap">
         {/* Speed */}
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Speed</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+            Speed
+          </span>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="h-7 text-xs w-14" />}>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs w-14"
+                />
+              }
+            >
               {SPEEDS.find((s) => s.value === speed)?.label ?? `${speed}×`}
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {SPEEDS.map((s) => (
-                <DropdownMenuItem key={s.value} onClick={() => setSpeed(s.value)}>
+                <DropdownMenuItem
+                  key={s.value}
+                  onClick={() => setSpeed(s.value)}
+                >
                   {s.label}
                 </DropdownMenuItem>
               ))}
@@ -129,7 +168,10 @@ export function TimeControls() {
         {/* Day */}
         <div className="flex items-center gap-1">
           <Calendar className="h-3 w-3 text-muted-foreground" />
-          <Select value={serviceDay} onValueChange={(v) => v && setServiceDay(v as ServiceDay)}>
+          <Select
+            value={serviceDay}
+            onValueChange={(v) => v && setServiceDay(v as ServiceDay)}
+          >
             <SelectTrigger className="h-7 text-xs w-32">
               <SelectValue />
             </SelectTrigger>
@@ -146,7 +188,9 @@ export function TimeControls() {
         {/* Sprites toggle */}
         <div className="flex items-center gap-1.5 ml-auto">
           <Sparkles className="h-3 w-3 text-muted-foreground" />
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Vehicles</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+            Vehicles
+          </span>
           <Switch checked={showSprites} onCheckedChange={setShowSprites} />
         </div>
       </div>

@@ -39,9 +39,36 @@ export interface Trip {
 export interface ActiveRouteState {
   routeId: string;
   tripId: string;
-  trips: Trip[];      // canonical (longest) trips per direction for this route
-  stops: Stop[];      // stops for the currently selected trip
-  shapes: Shape[];    // shape points for the currently selected trip
+  trips: Trip[]; // canonical (longest) trips per direction for this route
+  stops: Stop[]; // stops for the currently selected trip
+  shapes: Shape[]; // shape points for the currently selected trip
+}
+
+type StopOverride = Pick<Stop, "lat" | "lon">;
+
+function getStopOverrideKey(stopId: string, sequence: number): string {
+  return `${stopId}::${sequence}`;
+}
+
+function applyStopOverrides(
+  stops: Stop[],
+  overrides?: Map<string, StopOverride>,
+) {
+  if (!overrides || overrides.size === 0) return stops;
+  return stops.map((stop) => {
+    const override = overrides.get(
+      getStopOverrideKey(stop.stopId, stop.sequence),
+    );
+    return override ? { ...stop, lat: override.lat, lon: override.lon } : stop;
+  });
+}
+
+function stopsToShape(stops: Stop[]): Shape[] {
+  return stops.map((stop) => ({
+    lat: stop.lat,
+    lon: stop.lon,
+    sequence: stop.sequence,
+  }));
 }
 
 interface RouteStore {
@@ -55,21 +82,40 @@ interface RouteStore {
   focusedRouteId: string | null;
   /** Pinned routes stay on the map even when not focused. */
   pinnedRouteIds: Set<string>;
+  /** Session-only stop position edits, keyed by route and stop. */
+  stopOverrides: Map<string, Map<string, StopOverride>>;
   isLoading: boolean;
+  isStopEditMode: boolean;
 
   setRoutes: (routes: Route[]) => void;
   setLoading: (loading: boolean) => void;
+  setStopEditMode: (enabled: boolean) => void;
 
   /** Add a route to active set with its data, focus it. Replaces previous focus if unpinned. */
   setActiveRoute: (state: ActiveRouteState) => void;
   /** Change focused route (must already be in activeRoutes). */
   setFocusedRoute: (routeId: string | null) => void;
   /** Update the selected trip for an already-active route. */
-  setActiveTrip: (routeId: string, tripId: string, stops: Stop[], shapes: Shape[]) => void;
+  setActiveTrip: (
+    routeId: string,
+    tripId: string,
+    stops: Stop[],
+    shapes: Shape[],
+  ) => void;
+  /** Update a single stop position for an active route. */
+  updateStopPosition: (
+    routeId: string,
+    stopId: string,
+    sequence: number,
+    lat: number,
+    lon: number,
+  ) => void;
   /** Toggle pinned state for a route. Unpinning + not focused removes from active. */
   togglePin: (routeId: string) => void;
   /** Remove a route from the active set entirely. */
   removeActiveRoute: (routeId: string) => void;
+  /** Clear all currently active/pinned routes and session route edits. */
+  resetAllRoutes: () => void;
 }
 
 export const useRouteStore = create<RouteStore>((set) => ({
@@ -77,19 +123,29 @@ export const useRouteStore = create<RouteStore>((set) => ({
   activeRoutes: new Map(),
   focusedRouteId: null,
   pinnedRouteIds: new Set(),
+  stopOverrides: new Map(),
   isLoading: false,
+  isStopEditMode: false,
 
   setRoutes: (routes) => set({ routes }),
   setLoading: (isLoading) => set({ isLoading }),
+  setStopEditMode: (isStopEditMode) => set({ isStopEditMode }),
 
   setActiveRoute: (newState) =>
     set((s) => {
+      const overrides = s.stopOverrides.get(newState.routeId);
+      const stops = applyStopOverrides(newState.stops, overrides);
+      const shapes = overrides ? stopsToShape(stops) : newState.shapes;
       const next = new Map(s.activeRoutes);
       // If the previously focused route was unpinned, remove it.
-      if (s.focusedRouteId && s.focusedRouteId !== newState.routeId && !s.pinnedRouteIds.has(s.focusedRouteId)) {
+      if (
+        s.focusedRouteId &&
+        s.focusedRouteId !== newState.routeId &&
+        !s.pinnedRouteIds.has(s.focusedRouteId)
+      ) {
         next.delete(s.focusedRouteId);
       }
-      next.set(newState.routeId, newState);
+      next.set(newState.routeId, { ...newState, stops, shapes });
       return { activeRoutes: next, focusedRouteId: newState.routeId };
     }),
 
@@ -97,7 +153,11 @@ export const useRouteStore = create<RouteStore>((set) => ({
     set((s) => {
       // Drop previous focus if it was unpinned and exists in active set.
       const next = new Map(s.activeRoutes);
-      if (s.focusedRouteId && s.focusedRouteId !== routeId && !s.pinnedRouteIds.has(s.focusedRouteId)) {
+      if (
+        s.focusedRouteId &&
+        s.focusedRouteId !== routeId &&
+        !s.pinnedRouteIds.has(s.focusedRouteId)
+      ) {
         next.delete(s.focusedRouteId);
       }
       return { activeRoutes: next, focusedRouteId: routeId };
@@ -108,8 +168,42 @@ export const useRouteStore = create<RouteStore>((set) => ({
       const next = new Map(s.activeRoutes);
       const existing = next.get(routeId);
       if (!existing) return s;
-      next.set(routeId, { ...existing, tripId, stops, shapes });
+      const overrides = s.stopOverrides.get(routeId);
+      const nextStops = applyStopOverrides(stops, overrides);
+      next.set(routeId, {
+        ...existing,
+        tripId,
+        stops: nextStops,
+        shapes: overrides ? stopsToShape(nextStops) : shapes,
+      });
       return { activeRoutes: next };
+    }),
+
+  updateStopPosition: (routeId, stopId, sequence, lat, lon) =>
+    set((s) => {
+      const existing = s.activeRoutes.get(routeId);
+      if (!existing) return s;
+
+      const routeOverrides = new Map(s.stopOverrides.get(routeId) ?? []);
+      routeOverrides.set(getStopOverrideKey(stopId, sequence), { lat, lon });
+
+      const stopOverrides = new Map(s.stopOverrides);
+      stopOverrides.set(routeId, routeOverrides);
+
+      const nextStops = existing.stops.map((stop) =>
+        stop.stopId === stopId && stop.sequence === sequence
+          ? { ...stop, lat, lon }
+          : stop,
+      );
+
+      const next = new Map(s.activeRoutes);
+      next.set(routeId, {
+        ...existing,
+        stops: nextStops,
+        shapes: stopsToShape(nextStops),
+      });
+
+      return { activeRoutes: next, stopOverrides };
     }),
 
   togglePin: (routeId) =>
@@ -138,5 +232,14 @@ export const useRouteStore = create<RouteStore>((set) => ({
         pinnedRouteIds: pinned,
         focusedRouteId: s.focusedRouteId === routeId ? null : s.focusedRouteId,
       };
+    }),
+
+  resetAllRoutes: () =>
+    set({
+      activeRoutes: new Map(),
+      focusedRouteId: null,
+      pinnedRouteIds: new Set(),
+      stopOverrides: new Map(),
+      isStopEditMode: false,
     }),
 }));

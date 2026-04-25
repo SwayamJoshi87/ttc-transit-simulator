@@ -1,7 +1,9 @@
 "use client";
 
-import { Polyline, CircleMarker, Tooltip } from "react-leaflet";
-import { useTheme } from "next-themes";
+import { useMemo } from "react";
+import { divIcon, type Marker as LeafletMarker } from "leaflet";
+import { Marker, Polyline, CircleMarker, Tooltip } from "react-leaflet";
+import { useTheme } from "@/components/theme-provider";
 import type { ActiveRouteState } from "@/store/routeStore";
 
 interface Props {
@@ -9,6 +11,15 @@ interface Props {
   color: string;
   /** When true, full glow + opacity. When false, render with reduced emphasis. */
   isFocused: boolean;
+  /** When true, stop markers become draggable. */
+  isStopEditing: boolean;
+  onStopMove: (
+    routeId: string,
+    stopId: string,
+    sequence: number,
+    lat: number,
+    lon: number,
+  ) => void;
 }
 
 /**
@@ -17,11 +28,43 @@ interface Props {
  * polyline approach produces a "glow" without SVG filters, which would lag
  * across many routes.
  */
-export function RouteLayer({ active, color, isFocused }: Props) {
+export function RouteLayer({
+  active,
+  color,
+  isFocused,
+  isStopEditing,
+  onStopMove,
+}: Props) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
-  const positions: [number, number][] = active.shapes.map((s) => [s.lat, s.lon]);
+  const stopIcon = useMemo(() => {
+    const border = isDark ? "#09090b" : "#ffffff";
+    const size = isFocused ? 14 : 12;
+    const ring = isFocused ? 2 : 1.5;
+    return divIcon({
+      className: "route-stop-icon",
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      html: `
+        <div style="
+          width:${size}px;
+          height:${size}px;
+          border-radius:9999px;
+          background:${color};
+          border:${ring}px solid ${border};
+          box-shadow:0 0 0 1px rgba(0,0,0,0.08);
+          cursor:${isStopEditing ? "grab" : "default"};
+          transform:translateZ(0);
+        "></div>
+      `,
+    });
+  }, [color, isDark, isFocused, isStopEditing]);
+
+  const positions: [number, number][] = active.shapes.map((s) => [
+    s.lat,
+    s.lon,
+  ]);
   if (positions.length === 0) return null;
 
   // Halos are softer when not focused so pinned-but-background routes stay readable.
@@ -67,22 +110,50 @@ export function RouteLayer({ active, color, isFocused }: Props) {
         }}
       />
 
-      {active.stops.map((stop) => (
-        <CircleMarker
-          key={`${active.routeId}-${stop.stopId}`}
-          center={[stop.lat, stop.lon]}
-          radius={isFocused ? 5 : 3.5}
-          pathOptions={{
-            color,
-            fillColor: isDark ? "#0a0a0a" : "#ffffff",
-            fillOpacity: 1,
-            weight: 2,
-            opacity: isFocused ? 1 : 0.7,
-          }}
-        >
-          <Tooltip>{stop.stopName}</Tooltip>
-        </CircleMarker>
-      ))}
+      {active.stops.map((stop) => {
+        if (isStopEditing && isFocused) {
+          return (
+            <Marker
+              key={`${active.routeId}-${stop.stopId}-${stop.sequence}`}
+              position={[stop.lat, stop.lon]}
+              icon={stopIcon}
+              draggable
+              eventHandlers={{
+                dragend: (event) => {
+                  const marker = event.target as LeafletMarker;
+                  const next = marker.getLatLng();
+                  onStopMove(
+                    active.routeId,
+                    stop.stopId,
+                    stop.sequence,
+                    next.lat,
+                    next.lng,
+                  );
+                },
+              }}
+            >
+              <Tooltip>{stop.stopName}</Tooltip>
+            </Marker>
+          );
+        }
+
+        return (
+          <CircleMarker
+            key={`${active.routeId}-${stop.stopId}-${stop.sequence}`}
+            center={[stop.lat, stop.lon]}
+            radius={isFocused ? 5 : 3.5}
+            pathOptions={{
+              color,
+              fillColor: isDark ? "#0a0a0a" : "#ffffff",
+              fillOpacity: 1,
+              weight: 2,
+              opacity: isFocused ? 1 : 0.7,
+            }}
+          >
+            <Tooltip>{stop.stopName}</Tooltip>
+          </CircleMarker>
+        );
+      })}
     </>
   );
 }
