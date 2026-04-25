@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import { useTheme } from "next-themes";
 import { useRouteStore } from "@/store/routeStore";
 import { getRouteColor } from "@/lib/routeColors";
+import { RouteLayer } from "./RouteLayer";
+import { SimulationSprites } from "./SimulationSprites";
 import "leaflet/dist/leaflet.css";
 
 const TORONTO_CENTER: [number, number] = [43.7, -79.42];
@@ -21,14 +23,18 @@ const DARK_TILES = {
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
 };
 
-function FlyToRoute() {
+/** Auto-fit map to the focused route's stops whenever it changes. */
+function FlyToFocused() {
   const map = useMap();
-  const stopsForTrip = useRouteStore((s) => s.stopsForTrip);
+  const focusedRouteId = useRouteStore((s) => s.focusedRouteId);
+  const activeRoutes = useRouteStore((s) => s.activeRoutes);
 
   useEffect(() => {
-    if (stopsForTrip.length === 0) return;
-    const lats = stopsForTrip.map((s) => s.lat);
-    const lons = stopsForTrip.map((s) => s.lon);
+    if (!focusedRouteId) return;
+    const focused = activeRoutes.get(focusedRouteId);
+    if (!focused || focused.stops.length === 0) return;
+    const lats = focused.stops.map((s) => s.lat);
+    const lons = focused.stops.map((s) => s.lon);
     map.fitBounds(
       [
         [Math.min(...lats), Math.min(...lons)],
@@ -36,60 +42,43 @@ function FlyToRoute() {
       ],
       { padding: [40, 40] }
     );
-  }, [stopsForTrip, map]);
+  }, [focusedRouteId, activeRoutes, map]);
 
   return null;
 }
 
 export default function TransitMap() {
   const { resolvedTheme } = useTheme();
-  const shapesForTrip = useRouteStore((s) => s.shapesForTrip);
-  const stopsForTrip = useRouteStore((s) => s.stopsForTrip);
-  const selectedRouteId = useRouteStore((s) => s.selectedRouteId);
+  const activeRoutes = useRouteStore((s) => s.activeRoutes);
+  const focusedRouteId = useRouteStore((s) => s.focusedRouteId);
   const routes = useRouteStore((s) => s.routes);
 
-  const selectedRoute = routes.find((r) => r.routeId === selectedRouteId);
-  const routeColor = selectedRoute ? getRouteColor(selectedRoute) : "#DA291C";
   const isDark = resolvedTheme === "dark";
   const tiles = isDark ? DARK_TILES : LIGHT_TILES;
-  // Swap tile layer key to force re-mount on theme change
   const tileKey = isDark ? "dark" : "light";
 
-  const shapePositions: [number, number][] = shapesForTrip.map((s) => [s.lat, s.lon]);
+  // Render order: focused route LAST so it stacks on top.
+  const sortedActive = Array.from(activeRoutes.values()).sort((a) => (a.routeId === focusedRouteId ? 1 : -1));
 
   return (
-    <MapContainer
-      center={TORONTO_CENTER}
-      zoom={12}
-      className="h-full w-full"
-      zoomControl={true}
-    >
+    <MapContainer center={TORONTO_CENTER} zoom={12} className="h-full w-full" zoomControl>
       <TileLayer key={tileKey} attribution={tiles.attribution} url={tiles.url} />
-      <FlyToRoute />
+      <FlyToFocused />
 
-      {shapePositions.length > 0 && (
-        <Polyline
-          key={`${selectedRouteId}-${routeColor}`}
-          positions={shapePositions}
-          pathOptions={{ color: routeColor, weight: 4, opacity: 0.9 }}
-        />
-      )}
+      {sortedActive.map((active) => {
+        const route = routes.find((r) => r.routeId === active.routeId);
+        if (!route) return null;
+        return (
+          <RouteLayer
+            key={active.routeId}
+            active={active}
+            color={getRouteColor(route)}
+            isFocused={active.routeId === focusedRouteId}
+          />
+        );
+      })}
 
-      {stopsForTrip.map((stop) => (
-        <CircleMarker
-          key={stop.stopId}
-          center={[stop.lat, stop.lon]}
-          radius={5}
-          pathOptions={{
-            color: routeColor,
-            fillColor: isDark ? "#0a0a0a" : "#ffffff",
-            fillOpacity: 1,
-            weight: 2,
-          }}
-        >
-          <Tooltip>{stop.stopName}</Tooltip>
-        </CircleMarker>
-      ))}
+      <SimulationSprites />
     </MapContainer>
   );
 }
