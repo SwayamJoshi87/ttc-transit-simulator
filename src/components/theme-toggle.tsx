@@ -1,5 +1,6 @@
 "use client";
 
+import type { MouseEvent } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,10 @@ import {
 export function ThemeToggle() {
   const { setTheme } = useTheme();
 
+  const pick = (theme: Parameters<typeof setTheme>[0], e: MouseEvent) => {
+    setTheme(theme, { x: e.clientX, y: e.clientY });
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
@@ -21,13 +26,13 @@ export function ThemeToggle() {
         <span className="sr-only">Toggle theme</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
+        <DropdownMenuItem onClick={(e) => pick("light", e)}>
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
+        <DropdownMenuItem onClick={(e) => pick("dark", e)}>
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
+        <DropdownMenuItem onClick={(e) => pick("system", e)}>
           System
         </DropdownMenuItem>
       </DropdownMenuContent>
