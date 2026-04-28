@@ -7,7 +7,7 @@ export type Theme = "light" | "dark" | "system";
 interface ThemeContextValue {
   theme: Theme;
   resolvedTheme: "light" | "dark";
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: Theme, origin?: { x: number; y: number }) => void;
 }
 
 interface ThemeProviderProps {
@@ -72,10 +72,45 @@ export function ThemeProvider({
     return () => media.removeEventListener("change", handler);
   }, [theme, enableSystem, attribute]);
 
-  const setTheme = React.useCallback((nextTheme: Theme) => {
-    setThemeState(nextTheme);
-    window.localStorage.setItem(STORAGE_KEY, nextTheme);
-  }, []);
+  const setTheme = React.useCallback(
+    (nextTheme: Theme, origin?: { x: number; y: number }) => {
+      const nextResolved = resolveTheme(nextTheme, enableSystem);
+      window.localStorage.setItem(STORAGE_KEY, nextTheme);
+
+      const doApply = () => {
+        if (attribute === "class") {
+          const root = document.documentElement;
+          root.classList.remove("light", "dark");
+          root.classList.add(nextResolved);
+        }
+        setThemeState(nextTheme);
+        setResolvedTheme(nextResolved);
+      };
+
+      if (
+        origin &&
+        typeof document !== "undefined" &&
+        "startViewTransition" in document
+      ) {
+        document.documentElement.style.setProperty(
+          "--theme-x",
+          `${origin.x}px`,
+        );
+        document.documentElement.style.setProperty(
+          "--theme-y",
+          `${origin.y}px`,
+        );
+        (
+          document as Document & {
+            startViewTransition: (cb: () => void) => unknown;
+          }
+        ).startViewTransition(doApply);
+      } else {
+        doApply();
+      }
+    },
+    [enableSystem, attribute],
+  );
 
   const value = React.useMemo<ThemeContextValue>(
     () => ({
