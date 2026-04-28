@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { divIcon, type Marker as LeafletMarker } from "leaflet";
-import { Marker, Polyline, CircleMarker, Tooltip } from "react-leaflet";
+import { Source, Layer, Marker } from "react-map-gl/maplibre";
+import type { MarkerDragEvent } from "react-map-gl/maplibre";
 import { useTheme } from "@/components/theme-provider";
 import type { ActiveRouteState } from "@/store/routeStore";
 
@@ -23,10 +23,10 @@ interface Props {
 }
 
 /**
- * Renders one transit route on the map as three stacked polylines (outer halo,
- * inner halo, sharp main line) plus circle markers for each stop. The stacked
- * polyline approach produces a "glow" without SVG filters, which would lag
- * across many routes.
+ * Renders one transit route as three stacked MapLibre line layers (outer halo,
+ * inner halo, sharp main line) plus circle markers for each stop.
+ *
+ * In edit mode, stop markers become individual draggable Marker components.
  */
 export function RouteLayer({
   active,
@@ -37,123 +37,138 @@ export function RouteLayer({
 }: Props) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-
-  const stopIcon = useMemo(() => {
-    const border = isDark ? "#09090b" : "#ffffff";
-    const size = isFocused ? 14 : 12;
-    const ring = isFocused ? 2 : 1.5;
-    return divIcon({
-      className: "route-stop-icon",
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2],
-      html: `
-        <div style="
-          width:${size}px;
-          height:${size}px;
-          border-radius:9999px;
-          background:${color};
-          border:${ring}px solid ${border};
-          box-shadow:0 0 0 1px rgba(0,0,0,0.08);
-          cursor:${isStopEditing ? "grab" : "default"};
-          transform:translateZ(0);
-        "></div>
-      `,
-    });
-  }, [color, isDark, isFocused, isStopEditing]);
-
-  const positions: [number, number][] = active.shapes.map((s) => [
-    s.lat,
-    s.lon,
-  ]);
-  if (positions.length === 0) return null;
-
-  // Halos are softer when not focused so pinned-but-background routes stay readable.
   const focusMul = isFocused ? 1 : 0.55;
+  const id = active.routeId;
 
-  // Unique key combining color forces remount when color changes,
-  // which works around react-leaflet's stale pathOptions.
-  const baseKey = `${active.routeId}-${color}-${isFocused ? "f" : "b"}`;
+  const routeGeoJSON = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features:
+        active.shapes.length > 1
+          ? [
+              {
+                type: "Feature" as const,
+                geometry: {
+                  type: "LineString" as const,
+                  coordinates: active.shapes.map((s) => [s.lon, s.lat]),
+                },
+                properties: {},
+              },
+            ]
+          : [],
+    }),
+    [active.shapes],
+  );
+
+  const stopsGeoJSON = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features: active.stops.map((stop) => ({
+        type: "Feature" as const,
+        geometry: {
+          type: "Point" as const,
+          coordinates: [stop.lon, stop.lat],
+        },
+        properties: {
+          stopId: stop.stopId,
+          stopName: stop.stopName,
+          sequence: stop.sequence,
+        },
+      })),
+    }),
+    [active.stops],
+  );
+
+  if (active.shapes.length === 0) return null;
+
+  const stopFill = isDark ? "#0a0a0a" : "#ffffff";
 
   return (
     <>
-      <Polyline
-        key={`${baseKey}-halo-outer`}
-        positions={positions}
-        pathOptions={{
-          color,
-          weight: 14,
-          opacity: 0.12 * focusMul,
-          lineCap: "round",
-          lineJoin: "round",
-        }}
-      />
-      <Polyline
-        key={`${baseKey}-halo-inner`}
-        positions={positions}
-        pathOptions={{
-          color,
-          weight: 8,
-          opacity: 0.28 * focusMul,
-          lineCap: "round",
-          lineJoin: "round",
-        }}
-      />
-      <Polyline
-        key={`${baseKey}-main`}
-        positions={positions}
-        pathOptions={{
-          color,
-          weight: isFocused ? 4 : 3,
-          opacity: isFocused ? 1 : 0.85,
-          lineCap: "round",
-          lineJoin: "round",
-        }}
-      />
+      {/* Route shape: 3 line layers for glow effect */}
+      <Source id={`${id}-route`} type="geojson" data={routeGeoJSON}>
+        <Layer
+          id={`${id}-halo-outer`}
+          type="line"
+          paint={{
+            "line-color": color,
+            "line-width": 14,
+            "line-opacity": 0.12 * focusMul,
+            "line-blur": 6,
+          }}
+          layout={{ "line-cap": "round", "line-join": "round" }}
+        />
+        <Layer
+          id={`${id}-halo-inner`}
+          type="line"
+          paint={{
+            "line-color": color,
+            "line-width": 8,
+            "line-opacity": 0.28 * focusMul,
+            "line-blur": 2,
+          }}
+          layout={{ "line-cap": "round", "line-join": "round" }}
+        />
+        <Layer
+          id={`${id}-main`}
+          type="line"
+          paint={{
+            "line-color": color,
+            "line-width": isFocused ? 4 : 3,
+            "line-opacity": isFocused ? 1 : 0.85,
+          }}
+          layout={{ "line-cap": "round", "line-join": "round" }}
+        />
+      </Source>
 
-      {active.stops.map((stop) => {
-        if (isStopEditing && isFocused) {
-          return (
-            <Marker
-              key={`${active.routeId}-${stop.stopId}-${stop.sequence}`}
-              position={[stop.lat, stop.lon]}
-              icon={stopIcon}
-              draggable
-              eventHandlers={{
-                dragend: (event) => {
-                  const marker = event.target as LeafletMarker;
-                  const next = marker.getLatLng();
-                  onStopMove(
-                    active.routeId,
-                    stop.stopId,
-                    stop.sequence,
-                    next.lat,
-                    next.lng,
-                  );
-                },
-              }}
-            >
-              <Tooltip>{stop.stopName}</Tooltip>
-            </Marker>
-          );
-        }
-
-        return (
-          <CircleMarker
-            key={`${active.routeId}-${stop.stopId}-${stop.sequence}`}
-            center={[stop.lat, stop.lon]}
-            radius={isFocused ? 5 : 3.5}
-            pathOptions={{
-              color,
-              fillColor: isDark ? "#0a0a0a" : "#ffffff",
-              fillOpacity: 1,
-              weight: 2,
-              opacity: isFocused ? 1 : 0.7,
-            }}
+      {/* Stop markers: draggable in edit mode, circle layer in view mode */}
+      {isStopEditing && isFocused ? (
+        active.stops.map((stop) => (
+          <Marker
+            key={`${id}-${stop.stopId}-${stop.sequence}`}
+            longitude={stop.lon}
+            latitude={stop.lat}
+            draggable
+            onDragEnd={(e: MarkerDragEvent) =>
+              onStopMove(
+                id,
+                stop.stopId,
+                stop.sequence,
+                e.lngLat.lat,
+                e.lngLat.lng,
+              )
+            }
           >
-            <Tooltip>{stop.stopName}</Tooltip>
-          </CircleMarker>
-        );
-      })}
+            <div
+              title={stop.stopName}
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: color,
+                border: `2px solid ${stopFill}`,
+                boxShadow: "0 0 0 1px rgba(0,0,0,0.08)",
+                cursor: "grab",
+              }}
+            />
+          </Marker>
+        ))
+      ) : (
+        <Source id={`${id}-stops`} type="geojson" data={stopsGeoJSON}>
+          <Layer
+            id={`${id}-stops-circle`}
+            type="circle"
+            paint={{
+              "circle-radius": isFocused ? 5 : 3.5,
+              "circle-color": stopFill,
+              "circle-stroke-color": color,
+              "circle-stroke-width": 2,
+              "circle-opacity": isFocused ? 1 : 0.7,
+              "circle-stroke-opacity": isFocused ? 1 : 0.7,
+            }}
+          />
+        </Source>
+      )}
     </>
   );
 }

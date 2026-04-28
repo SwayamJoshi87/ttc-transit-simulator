@@ -1,31 +1,23 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { useEffect, useRef, useState } from "react";
+import Map, { Popup, useMap } from "react-map-gl/maplibre";
+import type { MapLayerMouseEvent } from "react-map-gl/maplibre";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "@/components/theme-provider";
 import { useRouteStore } from "@/store/routeStore";
 import { getRouteColor } from "@/lib/routeColors";
 import { RouteLayer } from "./RouteLayer";
 import { SimulationSprites } from "./SimulationSprites";
-import "leaflet/dist/leaflet.css";
 
-const TORONTO_CENTER: [number, number] = [43.7, -79.42];
+const LIGHT_STYLE =
+  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+const DARK_STYLE =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-const LIGHT_TILES = {
-  url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-};
-
-const DARK_TILES = {
-  url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-};
-
-/** Auto-fit map to the focused route's stops whenever it changes. */
+/** Auto-fits the map to the focused route's stops whenever the focused route or trip changes. */
 function FlyToFocused() {
-  const map = useMap();
+  const { current: map } = useMap();
   const focusedRouteId = useRouteStore((s) => s.focusedRouteId);
   const activeRoutes = useRouteStore((s) => s.activeRoutes);
   const focusedTripId = focusedRouteId
@@ -38,17 +30,17 @@ function FlyToFocused() {
   }, [activeRoutes]);
 
   useEffect(() => {
-    if (!focusedRouteId) return;
+    if (!map || !focusedRouteId) return;
     const focused = activeRoutesRef.current.get(focusedRouteId);
     if (!focused || focused.stops.length === 0) return;
-    const lats = focused.stops.map((s) => s.lat);
     const lons = focused.stops.map((s) => s.lon);
+    const lats = focused.stops.map((s) => s.lat);
     map.fitBounds(
       [
-        [Math.min(...lats), Math.min(...lons)],
-        [Math.max(...lats), Math.max(...lons)],
+        [Math.min(...lons), Math.min(...lats)],
+        [Math.max(...lons), Math.max(...lats)],
       ],
-      { padding: [40, 40] },
+      { padding: 40, duration: 800 },
     );
   }, [focusedRouteId, focusedTripId, map]);
 
@@ -63,27 +55,43 @@ export default function TransitMap() {
   const isStopEditMode = useRouteStore((s) => s.isStopEditMode);
   const updateStopPosition = useRouteStore((s) => s.updateStopPosition);
 
-  const isDark = resolvedTheme === "dark";
-  const tiles = isDark ? DARK_TILES : LIGHT_TILES;
-  const tileKey = isDark ? "dark" : "light";
+  const [hoveredStop, setHoveredStop] = useState<{
+    lon: number;
+    lat: number;
+    name: string;
+  } | null>(null);
 
-  // Render order: focused route LAST so it stacks on top.
+  const isDark = resolvedTheme === "dark";
+
+  // Focused route renders last so it stacks on top of pinned routes.
   const sortedActive = Array.from(activeRoutes.values()).sort((a) =>
     a.routeId === focusedRouteId ? 1 : -1,
   );
 
+  // Only stop-circle layers are interactive (hover tooltips).
+  const stopLayerIds = sortedActive.map((a) => `${a.routeId}-stops-circle`);
+
+  function handleMouseEnterStop(e: MapLayerMouseEvent) {
+    const feature = e.features?.[0];
+    if (!feature || feature.geometry.type !== "Point") return;
+    const coords = (feature.geometry as GeoJSON.Point).coordinates;
+    setHoveredStop({
+      lon: coords[0],
+      lat: coords[1],
+      name: (feature.properties?.stopName as string) ?? "",
+    });
+  }
+
   return (
-    <MapContainer
-      center={TORONTO_CENTER}
-      zoom={12}
-      className="h-full w-full"
-      zoomControl
+    <Map
+      id="main"
+      initialViewState={{ longitude: -79.42, latitude: 43.7, zoom: 12 }}
+      style={{ width: "100%", height: "100%" }}
+      mapStyle={isDark ? DARK_STYLE : LIGHT_STYLE}
+      interactiveLayerIds={stopLayerIds}
+      onMouseEnter={handleMouseEnterStop}
+      onMouseLeave={() => setHoveredStop(null)}
     >
-      <TileLayer
-        key={tileKey}
-        attribution={tiles.attribution}
-        url={tiles.url}
-      />
       <FlyToFocused />
 
       {sortedActive.map((active) => {
@@ -102,6 +110,19 @@ export default function TransitMap() {
       })}
 
       <SimulationSprites />
-    </MapContainer>
+
+      {hoveredStop && (
+        <Popup
+          longitude={hoveredStop.lon}
+          latitude={hoveredStop.lat}
+          closeButton={false}
+          closeOnClick={false}
+          offset={12}
+          style={{ pointerEvents: "none" }}
+        >
+          <span className="text-xs">{hoveredStop.name}</span>
+        </Popup>
+      )}
+    </Map>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { CircleMarker, Tooltip } from "react-leaflet";
+import { Source, Layer } from "react-map-gl/maplibre";
+import type { FeatureCollection, Feature, Point } from "geojson";
 import { useRouteStore } from "@/store/routeStore";
 import { useSimulationStore } from "@/store/simulationStore";
 import { getRouteColor } from "@/lib/routeColors";
@@ -15,19 +16,12 @@ export function SimulationSprites() {
   const currentTimeSec = useSimulationStore((s) => s.currentTimeSec);
   const serviceDay = useSimulationStore((s) => s.serviceDay);
 
-  // For each active route on the map, find all trips active at currentTime and
-  // compute sprite positions. Recomputed every time the slider/play tick fires.
-  const sprites = useMemo(() => {
-    if (!showSprites) return [];
-    const out: {
-      lat: number;
-      lon: number;
-      color: string;
-      routeShortName: string;
-      tripId: string;
-      routeId: string;
-      tripHeadsign: string;
-    }[] = [];
+  // Build a single GeoJSON FeatureCollection for all active vehicle sprites.
+  // Per-feature `color` property drives MapLibre's data-driven circle-color expression.
+  const spritesGeoJSON = useMemo((): FeatureCollection => {
+    const features: Feature<Point>[] = [];
+
+    if (!showSprites) return { type: "FeatureCollection", features };
 
     for (const active of activeRoutes.values()) {
       const cache = routeCache.get(active.routeId);
@@ -38,10 +32,7 @@ export function SimulationSprites() {
 
       const color = getRouteColor(route);
 
-      // Only show sprites for the selected direction to avoid showing both
-      // directions at once and to prevent stale-path artifacts when the user
-      // switches direction (non-canonical trips fall back to active.stops which
-      // would be wrong for the opposite direction).
+      // Show only the selected direction to avoid opposite-direction artifacts.
       const selectedCanonical = active.trips.find(
         (t) => t.tripId === active.tripId,
       );
@@ -55,68 +46,52 @@ export function SimulationSprites() {
 
         const stopTimes = cache.stopTimesByTrip[trip.tripId] ?? [];
         if (stopTimes.length < 2) continue;
+        if (
+          currentTimeSec < stopTimes[0].arrivalSec ||
+          currentTimeSec > stopTimes[stopTimes.length - 1].arrivalSec
+        )
+          continue;
 
-        const firstTime = stopTimes[0].arrivalSec;
-        const lastTime = stopTimes[stopTimes.length - 1].arrivalSec;
-        if (currentTimeSec < firstTime || currentTimeSec > lastTime) continue;
-
-        // Always use active.stops — it has drag overrides applied and covers
-        // all stop IDs for this direction (canonical trip is the longest).
         if (active.stops.length === 0) continue;
-        const stopMap = new Map(active.stops.map((stop) => [stop.stopId, stop]));
+        const stopMap = new Map(
+          active.stops.map((stop) => [stop.stopId, stop]),
+        );
         const pos = getSpritePosition(trip, stopTimes, stopMap, currentTimeSec);
-
         if (!pos) continue;
-        out.push({
-          lat: pos.lat,
-          lon: pos.lon,
-          color,
-          routeShortName: route.routeShortName,
-          tripId: trip.tripId,
-          routeId: route.routeId,
-          tripHeadsign: trip.tripHeadsign,
+
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [pos.lon, pos.lat] },
+          properties: {
+            color,
+            tripId: trip.tripId,
+            routeId: route.routeId,
+            routeShortName: route.routeShortName,
+            tripHeadsign: trip.tripHeadsign,
+          },
         });
       }
     }
-    return out;
-  }, [
-    activeRoutes,
-    routeCache,
-    routes,
-    currentTimeSec,
-    serviceDay,
-    showSprites,
-  ]);
+
+    return { type: "FeatureCollection", features };
+  }, [activeRoutes, routeCache, routes, currentTimeSec, serviceDay, showSprites]);
 
   if (!showSprites) return null;
 
   return (
-    <>
-      {sprites.map((s) => (
-        <CircleMarker
-          key={`${s.routeId}-${s.tripId}`}
-          center={[s.lat, s.lon]}
-          radius={6}
-          pathOptions={{
-            color: "#ffffff",
-            fillColor: s.color,
-            fillOpacity: 1,
-            weight: 2,
-            opacity: 1,
-          }}
-        >
-          <Tooltip>
-            <div className="text-[11px]">
-              <span className="font-bold">{s.routeShortName}</span>
-              {s.tripHeadsign && (
-                <span className="ml-1 text-muted-foreground">
-                  → {s.tripHeadsign}
-                </span>
-              )}
-            </div>
-          </Tooltip>
-        </CircleMarker>
-      ))}
-    </>
+    <Source id="sprites" type="geojson" data={spritesGeoJSON}>
+      <Layer
+        id="sprites-layer"
+        type="circle"
+        paint={{
+          "circle-radius": 6,
+          "circle-color": ["get", "color"],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+          "circle-opacity": 1,
+          "circle-stroke-opacity": 1,
+        }}
+      />
+    </Source>
   );
 }
