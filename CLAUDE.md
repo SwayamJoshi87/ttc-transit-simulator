@@ -140,3 +140,216 @@ npm run lint
 ```
 
 Requires `DATABASE_URL` in `.env.local` — see GTFS Data Setup above.
+
+-----
+
+## MVP 2: Transit Accessibility Analysis Platform
+
+The project is evolving from a GTFS visualizer into a **transit accessibility analysis tool** — a platform where users can edit transit routes/stops, save those edits as named scenarios, and run accessibility calculations to see how changes affect what populations can reach by transit.
+
+The north star is: *"A user edits a bus route, adds a stop, and immediately sees a choropleth of how many more people can reach downtown in 45 minutes."*
+
+-----
+
+## MVP 2 — Map Library: Migrating from Leaflet to MapLibre GL JS
+
+### Why we are leaving Leaflet
+
+Leaflet is DOM/Canvas-based. Every polyline, marker, and polygon is an individual DOM element. This worked fine for the initial route viewer, but Phase 2 adds:
+
+- Accessibility choropleths (thousands of dissemination block polygons, updated on every scenario change)
+- Isochrone GeoJSON polygons from R5
+- Animated vehicle sprites across all active routes simultaneously
+- Potentially deck.gl arc/hex layers for population and flow visualization
+
+At that data volume, Leaflet's per-element rendering model becomes a bottleneck. Updating a choropleth means touching thousands of DOM nodes. MapLibre renders everything as a single GPU draw call via WebGL.
+
+### Why MapLibre GL JS specifically
+
+- **WebGL rendering** — hardware-accelerated, handles tens of thousands of features with no perceptible frame drop
+- **Data-driven styling** — color every dissemination block by accessibility score using a single layer expression; updating scores means swapping a GeoJSON source, not re-rendering React components
+- **Fully free and open source** — MIT license, no API key required for rendering, compatible with the same OpenStreetMap tile sources already in use
+- **Pitch and rotation** — tilt the map for 3D building extrusion context, useful for visualizing accessibility in dense urban areas
+- **deck.gl compatibility** — deck.gl layers (H3 hexagons, arc flows, column layers) mount directly on MapLibre's WebGL context for GPU-accelerated analysis visualizations
+- **react-map-gl wrapper** — provides a React component API; migration from react-leaflet is real work but follows a clear pattern (sources + layers replace component trees)
+
+### Migration approach
+
+Do the MapLibre migration **before** building the analysis UI layers, not after. The choropleth and isochrone layers are the primary reason to migrate and are dramatically simpler to build in MapLibre. Building them in Leaflet first would mean doing the work twice.
+
+Migration pattern:
+
+- `MapWrapper.tsx` / `TransitMap.tsx` → replace react-leaflet `MapContainer` with react-map-gl `Map` (MapLibre flavor)
+- `RouteLayer.tsx` → replace `Polyline` components with MapLibre `Source` + `Layer` (type `line`). The 3-polyline glow trick becomes a `line-blur` + `line-width` paint expression — cleaner
+- `SimulationSprites.tsx` → replace per-marker `setLatLng` with a GeoJSON `Source` that updates on rAF; MapLibre handles GPU animation
+- Stop markers → `circle` layer or `symbol` layer on a GeoJSON source, not individual marker components
+- Keep the `dynamic(..., { ssr: false })` SSR bypass — MapLibre is also browser-only
+
+### New layers to add (MapLibre + deck.gl)
+
+|Layer                    |Library                 |Purpose                                        |
+|-------------------------|------------------------|-----------------------------------------------|
+|Route polylines          |MapLibre `line`         |Existing routes, glow via paint expressions    |
+|Stop markers             |MapLibre `circle`       |Existing stops                                 |
+|Isochrone polygons       |MapLibre `fill`         |R5 output, travel-time contours                |
+|Block choropleth         |MapLibre `fill`         |Accessibility scores per dissemination block   |
+|Accessibility hex columns|deck.gl `H3HexagonLayer`|3D columns, height = accessibility score       |
+|Population density       |deck.gl `H3HexagonLayer`|3D columns, height = population count          |
+|Transit flow arcs        |deck.gl `ArcLayer`      |Origin → destination flows                     |
+|Vehicle sprites          |MapLibre GeoJSON source |Existing simulation, rewritten as source update|
+
+-----
+
+## MVP 2 — Backend: R5 / r5py for Accessibility Analysis
+
+### Why R5
+
+The project goal is transit accessibility analysis: given a modified transit network, compute how many people can reach opportunities (jobs, hospitals, schools) within a travel-time cutoff, and show how that changes versus the baseline TTC network.
+
+R5 (Rapid Realistic Routing) is the industry-standard open-source engine for this. It is what Conveyal Analysis is built on, and is used by transit agencies and planning researchers worldwide. Key capabilities relevant to this project:
+
+- **Realistic departure-time modeling** — samples many departures across a time window (e.g. 7:00–9:00 AM) and returns percentile travel times, not a single optimistic trip. Captures real waiting and missed connections.
+- **Many-to-many travel time matrices** — compute travel time from every origin cell to every destination in one pass. The basis for all accessibility scoring.
+- **Cumulative opportunity accessibility** — "how many jobs reachable in 45 minutes" per origin. The standard transit equity metric.
+- **Gravity-based accessibility** — opportunities weighted by distance using decay functions (logistic, exponential). More realistic than hard cutoffs.
+- **Scenario modifications** — apply edits (add stop, reroute, change frequency) to a base network without regenerating the GTFS feed. Modifications are applied at analysis time.
+- **GTFS ingestion** — R5 parses the GTFS zip directly into its routing graph. No additional ETL required beyond what already loads into Postgres for the UI.
+- **Multi-feed support** — multiple GTFS feeds (TTC + GO Transit + MiWay) can be loaded into a single network.
+
+### Why r5py (Python wrapper) over raw R5 (Java)
+
+r5py wraps R5's Java engine in a Python interface, exposing `TransportNetwork`, `TravelTimeMatrixComputer`, and `DetailedItinerariesComputer` as clean Python objects. This lets the R5 service be written as a **FastAPI app** rather than a Java service, which:
+
+- Is easier to develop and deploy alongside the Next.js app
+- Integrates naturally with pandas/geopandas for population data and accessibility scoring
+- Makes the H3 hexagon aggregation (bucketing scores into Uber's hex grid for visualization) a one-liner
+- Is what most current academic and planning-tool projects use
+
+### What R5 is NOT being used for here
+
+R5 is a planning/analysis engine, not a live trip planner. It does not:
+
+- Provide real-time GTFS-RT updates
+- Generate turn-by-turn directions for a navigation app
+- Replace the existing GTFS-in-Postgres setup for the map UI
+
+The Postgres + Drizzle setup for route rendering, stop lists, and sprite animation is unchanged. R5 has its own in-memory copy of the network for analysis only.
+
+### Why NOT just OSRM or Valhalla
+
+OSRM and Valhalla do street routing (A→B path on a road network). They cannot compute transit travel times, model waiting for buses, or produce accessibility matrices across a population grid. They would be appropriate only for snapping a dragged stop to the nearest street — a much simpler problem. Since R5 also exposes the street network for this purpose, adding OSRM would be redundant.
+
+### Architecture: R5 as a sidecar service
+
+R5 / r5py runs as a **separate Python/FastAPI service** alongside the Next.js app. The browser never touches R5 directly. All R5 calls go through Next.js API routes that proxy to the FastAPI service.
+
+```
+Browser (MapLibre map)
+  → POST /api/analysis/isochrone { scenario_id, origin, cutoffs }
+  → Next.js API route (auth, validation, thin proxy)
+  → FastAPI r5py service (network build, routing, accessibility math)
+  → returns GeoJSON / accessibility JSON
+  → Next.js passes through to browser
+  → Browser updates MapLibre source → layer re-renders
+```
+
+The R5 FastAPI service is stateful: it holds the base `TransportNetwork` in memory after startup (~30s–2min build for Toronto). Subsequent analysis requests reuse the in-memory network. Network is only rebuilt when the base TTC GTFS feed updates (quarterly).
+
+### R5 service structure
+
+```
+services/
+  r5/
+    app/
+      main.py          # FastAPI: /isochrone, /travel-time-matrix, /accessibility, /network/build
+      networks.py      # In-memory TransportNetwork cache keyed by scenario_id
+      scenarios.py     # Load scenario edits from Postgres, build R5 modification list
+      population.py    # Load Statistics Canada 2021 dissemination block data for Toronto
+    data/
+      osm/toronto.osm.pbf        # Clipped to GTA bbox (-80.0,43.4,-78.9,44.1)
+      gtfs/ttc-base.zip          # Base TTC GTFS feed
+      pop/toronto-blocks.gpkg    # StatCan 2021 dissemination blocks with population
+    Dockerfile         # python:3.11-slim + r5py + JVM (r5py ships the JVM jar)
+```
+
+### Scenario / edit data model
+
+Edits are stored in Postgres as R5 modification JSON, not as mutated GTFS files. The base GTFS feed is never modified. When analysis is requested, edits are replayed on top of the base network at R5 analysis time.
+
+```sql
+-- New tables alongside existing GTFS tables
+
+CREATE TABLE scenarios (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT NOT NULL,
+  description TEXT,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE scenario_edits (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scenario_id UUID REFERENCES scenarios(id) ON DELETE CASCADE,
+  sequence    INTEGER NOT NULL,           -- replay order
+  edit_type   TEXT NOT NULL,              -- 'reroute' | 'add-trips' | 'remove-stops' | 'adjust-frequency' | 'adjust-speed'
+  route_id    TEXT,                       -- TTC route_id this edit targets
+  payload     JSONB NOT NULL,             -- full R5 modification JSON
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE analysis_runs (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scenario_id UUID REFERENCES scenarios(id),
+  run_type    TEXT NOT NULL,              -- 'isochrone' | 'travel-time-matrix' | 'accessibility'
+  params      JSONB NOT NULL,             -- departure time window, cutoffs, modes, opportunity field
+  result_path TEXT,                       -- path to stored result (GeoJSON / Parquet)
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+```
+
+An "add stop" edit on route 506 is stored as:
+
+```json
+{
+  "type": "reroute",
+  "route": "TTC:506",
+  "fromStop": "STOP_1234",
+  "toStop": "STOP_1235",
+  "stops": [
+    { "id": "user_new_1", "lat": 43.661, "lon": -79.389 }
+  ],
+  "dwellTime": 15
+}
+```
+
+### Population data
+
+Statistics Canada 2021 Census dissemination blocks are used as both origins (where people are) and opportunity data (employment by block). The `population.py` module loads these as a geopandas GeoDataFrame. r5py's `TravelTimeMatrixComputer` accepts origins and destinations as GeoDataFrames directly.
+
+For employment/opportunity data: City of Toronto Open Data has employment by ward. StatCan has place-of-work flows at the dissemination area level.
+
+### Key R5 OSM note
+
+Clip the OSM PBF to the GTA bounding box before handing to R5:
+
+```bash
+osmium extract --bbox=-80.0,43.4,-78.9,44.1 ontario-latest.osm.pbf -o toronto-gta.osm.pbf
+```
+
+Full Ontario PBF works but wastes RAM and extends network build time. Clipped GTA PBF is ~150MB and builds in under a minute.
+
+### Streetcar / subway edit constraints
+
+R5's `reroute` modification for rail modes is constrained to the rail network present in the OSM data. Toronto's OSM streetcar track coverage is adequate but imperfect; subway tunnels are poorly mapped. For rail route edits, restrict the UI to **stop position adjustment along the existing GTFS shape** rather than free rerouting. Free rerouting via R5 is appropriate for bus routes only, where the OSM street network is complete.
+
+-----
+
+## MVP 2 — Summary of what is NOT changing
+
+- Postgres + Drizzle ORM for GTFS data (route list, shapes, stop_times for sprite animation)
+- Zustand stores (`routeStore`, `simulationStore`) — structure unchanged, sprite/route logic unchanged
+- `GtfsProvider` React context — unchanged
+- The focus/pin multi-route model — unchanged
+- shadcn/ui + Tailwind — unchanged
+- Next.js App Router — unchanged
+- The simulation (sprites following stop_times) — logic unchanged, rendering moves from per-marker to MapLibre GeoJSON source
+- SSR bypass via `dynamic(..., { ssr: false })` — still required, MapLibre is also browser-only
