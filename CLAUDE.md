@@ -9,7 +9,7 @@ A web app for viewing and editing TTC (Toronto Transit Commission) transit route
 | Layer | Choice | Why |
 |---|---|---|
 | Framework | Next.js 14 (App Router) | SSR, file routing, server components |
-| Map | react-leaflet + OpenStreetMap | Free, no API key, sufficient for MVP |
+| Map | MapLibre GL JS + react-map-gl v8 | WebGL rendering, no API key, open source |
 | Geocoding | Nominatim (OSM) | Free reverse/forward geocoding, Toronto bbox |
 | Transit data | TTC GTFS static feed | Official TTC data: routes, stops, shapes, trips |
 | Database | PostgreSQL (Aiven) + Drizzle ORM | Stores GTFS data; queried server-side via API routes |
@@ -36,8 +36,8 @@ src/
     theme-provider.tsx     # next-themes wrapper (class strategy)
     theme-toggle.tsx       # Light/Dark/System dropdown in sidebar header
     map/
-      TransitMap.tsx       # Leaflet map: tiles + RouteLayers + SimulationSprites
-      MapWrapper.tsx       # dynamic() SSR-bypass wrapper for Leaflet
+      TransitMap.tsx       # MapLibre Map: mapStyle + RouteLayers (Sources/Layers) + SimulationSprites
+      MapWrapper.tsx       # dynamic() SSR-bypass wrapper (MapLibre is browser-only)
       RouteLayer.tsx       # One route's polylines (3 stacked = glow) + stop markers
       SimulationSprites.tsx# Per-trip animated markers based on stop_times + sim time
       TimeControls.tsx     # Bottom-of-map overlay: play/pause, slider, speed, day, sprites toggle
@@ -98,17 +98,16 @@ const idxs = [
 
 ## Key Architectural Decisions
 
-- **Leaflet is SSR-incompatible**: always import `TransitMap` via `dynamic(..., { ssr: false })` in `MapWrapper.tsx`
+- **MapLibre GL JS is SSR-incompatible**: always import `TransitMap` via `dynamic(..., { ssr: false })` in `MapWrapper.tsx`
 - **GTFS data lives in `GtfsProvider` (React context)**, not in Zustand. The parsed Maps are huge (thousands of entries) and would tank reactive performance. Anything that reads stop_times, shapes, calendar, or the trip list calls `useGtfs()`. Only derived per-route slices (stops/shapes for the selected trip) live in `routeStore`.
 - **Multi-route model**: `routeStore` tracks `activeRoutes: Map<routeId, ActiveRouteState>` plus `focusedRouteId` and `pinnedRouteIds`. Click = focus (replaces previous focus unless pinned). Pin button keeps a route in `activeRoutes` when focus moves elsewhere. The map renders every entry of `activeRoutes`; the sidebar footer/edit panel acts only on the focused route.
-- **Glow effect = 3 stacked polylines** (outer halo, inner halo, sharp main line). Don't use SVG `filter: blur()` — it's slow with many routes.
+- **Glow effect = 3 stacked MapLibre `line` layers** (outer halo, inner halo, sharp main line) using `line-blur` and `line-width` paint properties. Don't use SVG `filter: blur()` — it's slow with many routes.
 - **Simulation time**: stored as seconds-since-midnight in `simulationStore.currentTimeSec`. GTFS times can exceed 24:00:00 for after-midnight trips — `parseGtfsTime()` handles that. The slider spans 04:00–28:00 (TTC service-day convention). When `isPlaying`, `TimeControls` advances time on rAF: `delta * speed`. Sprites read `currentTimeSec` and `serviceDay` to decide which trips are active and where they are.
 - **Service day filtering**: `calendar.txt` maps `service_id → days_of_week`. `getActiveServiceIds(calendar, day)` returns which `service_id`s run on that day; trips not in that set are hidden from the simulation.
 - **Nominatim rate limit**: 1 req/sec — debounce any geocoding calls; add `User-Agent: TTC-Transit-Simulator/1.0` to every Nominatim request (required by their ToS)
 - **Route colors**: never read `route.routeColor` directly — always go through `getRouteColor(route)` from `src/lib/routeColors.ts`. It handles per-line subway colors (Line 1 yellow, Line 2 green, Line 4 purple), then falls back to GTFS `route_color`, then to per-type defaults (Streetcar red, Bus slate).
 - **shadcn flavor uses `@base-ui/react`, not Radix**: APIs differ — e.g. base-ui Select's `onValueChange` is `(value: string | null) => void` (handle null), Collapsible exposes `data-open` (not `data-state="open"`), triggers accept a `render` prop instead of `asChild`.
-- **Dark mode**: `next-themes` with `attribute="class"`. Tailwind v4 dark variant is wired via `@custom-variant dark (&:is(.dark *))` in `globals.css`. The map swaps to CartoDB Dark Matter tiles (light uses CartoDB Voyager) — the `<TileLayer>` has a `key` so it re-mounts on theme change.
-- **react-leaflet `Polyline` color**: pass styling through `pathOptions={{ color, weight, opacity }}` rather than direct `color`/`weight` props. The direct props don't always propagate updates to the underlying Leaflet layer; `pathOptions` does. Add a `key` containing the color (or route ID) to force remount when the value changes — relying on prop diffing alone has caused stale visuals.
+- **Dark mode**: `next-themes` with `attribute="class"`. Tailwind v4 dark variant is wired via `@custom-variant dark (&:is(.dark *))` in `globals.css`. The map swaps to CartoDB Dark Matter vector style URL (light uses CartoDB Voyager) — the `<Map>` component receives `mapStyle` as a prop and re-renders when it changes.
 - **Canonical trip selection**: GTFS routes contain many trip variants (express, short-turn, late-night, test). Picking the *first* trip per direction surfaces these and produces broken visuals (e.g., Line 4 showing only 2 stops). Always reduce to the longest trip per `(directionId, tripHeadsign)` via `getCanonicalTrips()` in `src/lib/gtfs/parser.ts` before exposing trips to the UI.
 - **CSV parsing**: GTFS CSV fields can contain commas inside quotes (e.g., `"Don Mills Stn, Bay 1"`). Always parse via `papaparse` (not naive `.split(",")`) — see `src/lib/gtfs/parser.ts`.
 - **Database indices**: `stop_times(trip_id)`, `trips(route_id)`, and `shapes(shape_id)` all have indices. Without them the `inArray` queries in `app/api/gtfs/routes/[routeId]/route.ts` full-scan tables with 500k–800k rows. Defined in `src/lib/gtfs/schema.ts` and applied to the DB.
@@ -116,6 +115,7 @@ const idxs = [
 
 ## Scope
 
+### Done
 - [x] Map centered on Toronto with theme-aware tiles
 - [x] Sidebar (shadcn) with collapsible Subway/Streetcar/Bus groups + route search
 - [x] Click route → renders shape + stops; pin to keep multiple routes visible
@@ -127,6 +127,12 @@ const idxs = [
 - [x] Multi-route display with focus + pin model
 - [x] Time-of-day simulation: play/pause, slider, speed control, day-of-week selector
 - [x] Animated vehicle sprites following stop_times schedules
+- [x] Map rendering migrated from react-leaflet to MapLibre GL JS (WebGL, GPU draw calls)
+- [x] PostgreSQL database backend with Drizzle ORM (replaced flat-file GTFS reads)
+- [x] Per-route API (`/api/gtfs/routes/[routeId]`) serving trips, stop_times, shapes, calendar on demand
+- [x] DB indices on `stop_times(trip_id)`, `trips(route_id)`, `shapes(shape_id)` for fast route loads
+
+### To Do
 - [ ] Edit mode: drag stops to new positions
 - [ ] Edit mode: add/remove stops with reverse geocoding
 - [ ] Export edited route as GTFS or GeoJSON
@@ -151,7 +157,7 @@ The north star is: *"A user edits a bus route, adds a stop, and immediately sees
 
 -----
 
-## Map Library: Migrating from Leaflet to MapLibre GL JS
+## Map Library: MapLibre GL JS (migrated from Leaflet)
 
 ### Why we are leaving Leaflet
 
