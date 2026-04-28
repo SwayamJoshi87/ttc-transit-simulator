@@ -143,7 +143,7 @@ Requires `DATABASE_URL` in `.env.local` — see GTFS Data Setup above.
 
 -----
 
-## Phase 2: Transit Accessibility Analysis Platform
+## MVP 2: Transit Accessibility Analysis Platform
 
 The project is evolving from a GTFS visualizer into a **transit accessibility analysis tool** — a platform where users can edit transit routes/stops, save those edits as named scenarios, and run accessibility calculations to see how changes affect what populations can reach by transit.
 
@@ -151,7 +151,7 @@ The north star is: *"A user edits a bus route, adds a stop, and immediately sees
 
 -----
 
-## Map Library: Migrating from Leaflet to MapLibre GL JS
+## MVP 2 — Map Library: Migrating from Leaflet to MapLibre GL JS
 
 ### Why we are leaving Leaflet
 
@@ -200,7 +200,7 @@ Migration pattern:
 
 -----
 
-## Backend: R5 / r5py for Accessibility Analysis
+## MVP 2 — Backend: R5 / r5py for Accessibility Analysis
 
 ### Why R5
 
@@ -343,7 +343,7 @@ R5's `reroute` modification for rail modes is constrained to the rail network pr
 
 -----
 
-## Summary of what is NOT changing
+## MVP 2 — Summary of what is NOT changing
 
 - Postgres + Drizzle ORM for GTFS data (route list, shapes, stop_times for sprite animation)
 - Zustand stores (`routeStore`, `simulationStore`) — structure unchanged, sprite/route logic unchanged
