@@ -8,7 +8,7 @@ import { useTheme } from "@/components/theme-provider";
 import { useRouteStore } from "@/store/routeStore";
 import { getRouteColor } from "@/lib/routeColors";
 import { RouteLayer } from "./RouteLayer";
-import { SimulationSprites } from "./SimulationSprites";
+import { LiveVehicles } from "./SimulationSprites";
 
 const LIGHT_STYLE =
   "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
@@ -109,7 +109,7 @@ export default function TransitMap() {
         );
       })}
 
-      <SimulationSprites />
+      <LiveVehicles />
 
       {hoveredStop && (
         <Popup

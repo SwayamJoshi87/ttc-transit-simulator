@@ -1,87 +1,83 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Source, Layer } from "react-map-gl/maplibre";
 import type { FeatureCollection, Feature, Point } from "geojson";
 import { useRouteStore } from "@/store/routeStore";
 import { useSimulationStore } from "@/store/simulationStore";
 import { getRouteColor } from "@/lib/routeColors";
-import { getSpritePosition } from "@/lib/simulation";
+import type { VehiclePosition } from "@/app/api/gtfs/vehicles/route";
 
-export function SimulationSprites() {
+const POLL_INTERVAL_MS = 15_000;
+
+export function LiveVehicles() {
   const activeRoutes = useRouteStore((s) => s.activeRoutes);
-  const routeCache = useRouteStore((s) => s.routeCache);
   const routes = useRouteStore((s) => s.routes);
-  const showSprites = useSimulationStore((s) => s.showSprites);
-  const currentTimeSec = useSimulationStore((s) => s.currentTimeSec);
-  const serviceDay = useSimulationStore((s) => s.serviceDay);
+  const showVehicles = useSimulationStore((s) => s.showVehicles);
+  const [geojson, setGeojson] = useState<FeatureCollection>({
+    type: "FeatureCollection",
+    features: [],
+  });
 
-  // Build a single GeoJSON FeatureCollection for all active vehicle sprites.
-  // Per-feature `color` property drives MapLibre's data-driven circle-color expression.
-  const spritesGeoJSON = useMemo((): FeatureCollection => {
-    const features: Feature<Point>[] = [];
+  // Keep a ref so the interval callback always sees current active routes
+  // without restarting the interval on every route change.
+  const activeRouteIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    activeRouteIdsRef.current = new Set(activeRoutes.keys());
+  }, [activeRoutes]);
 
-    if (!showSprites) return { type: "FeatureCollection", features };
+  const routeColorMapRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    routeColorMapRef.current = new Map(
+      routes.map((r) => [r.routeId, getRouteColor(r)]),
+    );
+  }, [routes]);
 
-    for (const active of activeRoutes.values()) {
-      const cache = routeCache.get(active.routeId);
-      if (!cache) continue;
-
-      const route = routes.find((r) => r.routeId === active.routeId);
-      if (!route) continue;
-
-      const color = getRouteColor(route);
-
-      // Show only the selected direction to avoid opposite-direction artifacts.
-      const selectedCanonical = active.trips.find(
-        (t) => t.tripId === active.tripId,
-      );
-      const selectedDirectionId = selectedCanonical?.directionId ?? 0;
-
-      for (const trip of cache.trips) {
-        if (trip.directionId !== selectedDirectionId) continue;
-
-        const calendar = cache.serviceCalendarById[trip.serviceId];
-        if (!calendar || !calendar[serviceDay]) continue;
-
-        const stopTimes = cache.stopTimesByTrip[trip.tripId] ?? [];
-        if (stopTimes.length < 2) continue;
-        if (
-          currentTimeSec < stopTimes[0].arrivalSec ||
-          currentTimeSec > stopTimes[stopTimes.length - 1].arrivalSec
-        )
-          continue;
-
-        if (active.stops.length === 0) continue;
-        const stopMap = new Map(
-          active.stops.map((stop) => [stop.stopId, stop]),
-        );
-        const pos = getSpritePosition(trip, stopTimes, stopMap, currentTimeSec);
-        if (!pos) continue;
-
-        features.push({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [pos.lon, pos.lat] },
-          properties: {
-            color,
-            tripId: trip.tripId,
-            routeId: route.routeId,
-            routeShortName: route.routeShortName,
-            tripHeadsign: trip.tripHeadsign,
-          },
-        });
-      }
+  const poll = useCallback(async () => {
+    if (activeRouteIdsRef.current.size === 0) {
+      setGeojson({ type: "FeatureCollection", features: [] });
+      return;
     }
+    try {
+      const resp = await fetch("/api/gtfs/vehicles");
+      if (!resp.ok) return;
+      const all: VehiclePosition[] = await resp.json();
 
-    return { type: "FeatureCollection", features };
-  }, [activeRoutes, routeCache, routes, currentTimeSec, serviceDay, showSprites]);
+      const features: Feature<Point>[] = all
+        .filter((v) => activeRouteIdsRef.current.has(v.routeId))
+        .map((v) => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [v.lon, v.lat] },
+          properties: {
+            color: routeColorMapRef.current.get(v.routeId) ?? "#888888",
+            vehicleId: v.vehicleId,
+            bearing: v.bearing,
+          },
+        }));
 
-  if (!showSprites) return null;
+      setGeojson({ type: "FeatureCollection", features });
+    } catch {
+      // silently ignore network errors between polls
+    }
+  }, []);
+
+  // Poll immediately when active routes change, then on a fixed interval.
+  useEffect(() => {
+    if (!showVehicles) {
+      setGeojson({ type: "FeatureCollection", features: [] });
+      return;
+    }
+    void poll();
+    const id = setInterval(() => void poll(), POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [showVehicles, activeRoutes, poll]);
+
+  if (!showVehicles) return null;
 
   return (
-    <Source id="sprites" type="geojson" data={spritesGeoJSON}>
+    <Source id="live-vehicles" type="geojson" data={geojson}>
       <Layer
-        id="sprites-layer"
+        id="live-vehicles-layer"
         type="circle"
         paint={{
           "circle-radius": 6,

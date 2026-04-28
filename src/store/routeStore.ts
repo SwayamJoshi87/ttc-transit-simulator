@@ -29,35 +29,14 @@ export interface Trip {
   shapeId: string;
   tripHeadsign: string;
   directionId: number;
-  serviceId: string;
-}
-
-export interface StopTime {
-  stopId: string;
-  sequence: number;
-  arrivalSec: number;
-  departureSec: number;
-}
-
-export interface ServiceCalendar {
-  monday: boolean;
-  tuesday: boolean;
-  wednesday: boolean;
-  thursday: boolean;
-  friday: boolean;
-  saturday: boolean;
-  sunday: boolean;
 }
 
 export interface RouteCacheEntry {
   routeId: string;
   route: Route;
-  trips: Trip[];
   canonicalTrips: Trip[];
   stopsByTrip: Record<string, Stop[]>;
   shapesByTrip: Record<string, Shape[]>;
-  stopTimesByTrip: Record<string, StopTime[]>;
-  serviceCalendarById: Record<string, ServiceCalendar>;
 }
 
 /**

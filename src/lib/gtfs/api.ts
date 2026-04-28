@@ -4,17 +4,6 @@ interface RoutesResponse {
   routes: Route[];
 }
 
-interface RouteDetailsResponse {
-  route: Route;
-  routeId: string;
-  trips: RouteCacheEntry["trips"];
-  canonicalTrips: RouteCacheEntry["canonicalTrips"];
-  stopsByTrip: RouteCacheEntry["stopsByTrip"];
-  shapesByTrip: RouteCacheEntry["shapesByTrip"];
-  stopTimesByTrip: RouteCacheEntry["stopTimesByTrip"];
-  serviceCalendarById: RouteCacheEntry["serviceCalendarById"];
-}
-
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
@@ -31,17 +20,7 @@ export async function fetchRouteList() {
 export async function fetchRouteDetails(
   routeId: string,
 ): Promise<RouteCacheEntry> {
-  const data = await fetchJson<RouteDetailsResponse>(
+  return fetchJson<RouteCacheEntry>(
     `/api/gtfs/routes/${encodeURIComponent(routeId)}`,
   );
-  return {
-    routeId: data.routeId,
-    route: data.route,
-    trips: data.trips,
-    canonicalTrips: data.canonicalTrips,
-    stopsByTrip: data.stopsByTrip,
-    shapesByTrip: data.shapesByTrip,
-    stopTimesByTrip: data.stopTimesByTrip,
-    serviceCalendarById: data.serviceCalendarById,
-  };
 }
