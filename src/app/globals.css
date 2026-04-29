@@ -50,11 +50,12 @@
 
 /* React Resizable Panels Styles */
 [data-separator] {
-  @apply bg-border w-1 hover:bg-primary/20 transition-colors;
+  @apply bg-border hover:bg-primary/40 transition-colors;
   @apply cursor-col-resize;
-  @apply data-[active]:bg-primary/40;
+  @apply data-[active]:bg-primary/60;
   @apply z-50;
   @apply pointer-events-auto;
+  @apply w-1.5;
 }
 
 :root {
