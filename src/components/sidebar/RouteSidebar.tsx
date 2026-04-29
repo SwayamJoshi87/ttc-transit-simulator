@@ -90,7 +90,9 @@ export function RouteSidebar() {
   const [search, setSearch] = useState("");
   const [loadingRouteId, setLoadingRouteId] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(
-    () => window.localStorage.getItem("ttc-simulator-onboarding-seen") !== "1",
+    () =>
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("ttc-simulator-onboarding-seen") !== "1",
   );
 
   useEffect(() => {
