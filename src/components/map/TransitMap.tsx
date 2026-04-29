@@ -46,6 +46,24 @@ function FlyToFocused() {
   return null;
 }
 
+function FlyToStop() {
+  const { current: map } = useMap();
+  const stopCameraTarget = useRouteStore((s) => s.stopCameraTarget);
+
+  useEffect(() => {
+    if (!map || !stopCameraTarget) return;
+
+    map.flyTo({
+      center: [stopCameraTarget.lon, stopCameraTarget.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 700,
+      essential: true,
+    });
+  }, [map, stopCameraTarget]);
+
+  return null;
+}
+
 export default function TransitMap() {
   const { resolvedTheme } = useTheme();
   const activeRoutes = useRouteStore((s) => s.activeRoutes);
@@ -69,6 +87,7 @@ export default function TransitMap() {
       mapStyle={isDark ? DARK_STYLE : LIGHT_STYLE}
     >
       <FlyToFocused />
+      <FlyToStop />
 
       {sortedActive.map((active) => {
         const route = routes.find((r) => r.routeId === active.routeId);

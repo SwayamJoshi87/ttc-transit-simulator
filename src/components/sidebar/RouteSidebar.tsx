@@ -98,6 +98,7 @@ export function RouteSidebar() {
     setActiveRoute,
     setFocusedRoute,
     setActiveTrip,
+    focusStopOnMap,
     togglePin,
     removeActiveRoute,
     resetAllRoutes,
@@ -654,9 +655,19 @@ export function RouteSidebar() {
                     <ScrollArea className="min-h-0 flex-1 rounded-lg border border-muted/50 bg-muted/30 p-2">
                       <div className="space-y-1">
                         {focusedActive.stops.map((stop, i) => (
-                          <div
+                          <button
+                            type="button"
                             key={`${stop.stopId}-${stop.sequence}-${i}`}
-                            className="flex items-start gap-2 text-[11px] py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors group/stop"
+                            onClick={() =>
+                              focusStopOnMap(
+                                focusedActive.routeId,
+                                stop.stopId,
+                                stop.sequence,
+                                stop.lat,
+                                stop.lon,
+                              )
+                            }
+                            className="flex w-full items-start gap-2 text-left text-[11px] py-1.5 px-2 rounded-md hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring transition-colors group/stop"
                           >
                             <span className="text-muted-foreground w-5 text-right flex-shrink-0 font-semibold">
                               {String(i + 1).padStart(2, "0")}
@@ -664,7 +675,7 @@ export function RouteSidebar() {
                             <span className="truncate text-muted-foreground group-hover/stop:text-foreground transition-colors">
                               {stop.stopName}
                             </span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </ScrollArea>

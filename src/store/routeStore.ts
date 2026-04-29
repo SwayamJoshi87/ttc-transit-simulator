@@ -51,6 +51,15 @@ export interface ActiveRouteState {
   shapes: Shape[]; // shape points for the currently selected trip
 }
 
+export interface StopCameraTarget {
+  routeId: string;
+  stopId: string;
+  sequence: number;
+  lat: number;
+  lon: number;
+  requestId: number;
+}
+
 type StopOverride = Pick<Stop, "lat" | "lon">;
 
 function getStopOverrideKey(stopId: string, sequence: number): string {
@@ -93,6 +102,7 @@ interface RouteStore {
   stopOverrides: Map<string, Map<string, StopOverride>>;
   /** Per-route GTFS payload cache loaded on demand from API. */
   routeCache: Map<string, RouteCacheEntry>;
+  stopCameraTarget: StopCameraTarget | null;
   isLoading: boolean;
   isStopEditMode: boolean;
 
@@ -120,6 +130,13 @@ interface RouteStore {
     lat: number,
     lon: number,
   ) => void;
+  focusStopOnMap: (
+    routeId: string,
+    stopId: string,
+    sequence: number,
+    lat: number,
+    lon: number,
+  ) => void;
   /** Toggle pinned state for a route. Unpinning + not focused removes from active. */
   togglePin: (routeId: string) => void;
   /** Remove a route from the active set entirely. */
@@ -135,6 +152,7 @@ export const useRouteStore = create<RouteStore>((set) => ({
   pinnedRouteIds: new Set(),
   stopOverrides: new Map(),
   routeCache: new Map(),
+  stopCameraTarget: null,
   isLoading: false,
   isStopEditMode: false,
 
@@ -222,6 +240,18 @@ export const useRouteStore = create<RouteStore>((set) => ({
 
       return { activeRoutes: next, stopOverrides };
     }),
+
+  focusStopOnMap: (routeId, stopId, sequence, lat, lon) =>
+    set((s) => ({
+      stopCameraTarget: {
+        routeId,
+        stopId,
+        sequence,
+        lat,
+        lon,
+        requestId: (s.stopCameraTarget?.requestId ?? 0) + 1,
+      },
+    })),
 
   togglePin: (routeId) =>
     set((s) => {
