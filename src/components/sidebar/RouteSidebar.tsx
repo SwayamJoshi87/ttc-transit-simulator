@@ -391,7 +391,7 @@ export function RouteSidebar() {
                 return (
                   <Collapsible
                     key={type}
-                    defaultOpen={type !== 3}
+                    defaultOpen={true}
                     className="group/collapsible rounded-lg border bg-card/30 hover:bg-card/50 transition-colors"
                   >
                     <SidebarGroup className="py-0">
