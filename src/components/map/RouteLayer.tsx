@@ -140,7 +140,6 @@ export function RouteLayer({
             }
           >
             <div
-              title={stop.stopName}
               style={{
                 width: 14,
                 height: 14,

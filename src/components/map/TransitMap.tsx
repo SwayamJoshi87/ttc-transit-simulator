@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Map, { Popup, useMap } from "react-map-gl/maplibre";
-import type { MapLayerMouseEvent } from "react-map-gl/maplibre";
+import Map, { useMap } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "@/components/theme-provider";
 import { useRouteStore } from "@/store/routeStore";
@@ -55,12 +54,6 @@ export default function TransitMap() {
   const isStopEditMode = useRouteStore((s) => s.isStopEditMode);
   const updateStopPosition = useRouteStore((s) => s.updateStopPosition);
 
-  const [hoveredStop, setHoveredStop] = useState<{
-    lon: number;
-    lat: number;
-    name: string;
-  } | null>(null);
-
   const isDark = resolvedTheme === "dark";
 
   // Focused route renders last so it stacks on top of pinned routes.
@@ -68,29 +61,12 @@ export default function TransitMap() {
     a.routeId === focusedRouteId ? 1 : -1,
   );
 
-  // Only stop-circle layers are interactive (hover tooltips).
-  const stopLayerIds = sortedActive.map((a) => `${a.routeId}-stops-circle`);
-
-  function handleMouseEnterStop(e: MapLayerMouseEvent) {
-    const feature = e.features?.[0];
-    if (!feature || feature.geometry.type !== "Point") return;
-    const coords = (feature.geometry as GeoJSON.Point).coordinates;
-    setHoveredStop({
-      lon: coords[0],
-      lat: coords[1],
-      name: (feature.properties?.stopName as string) ?? "",
-    });
-  }
-
   return (
     <Map
       id="main"
       initialViewState={{ longitude: -79.42, latitude: 43.7, zoom: 12 }}
       style={{ width: "100%", height: "100%" }}
       mapStyle={isDark ? DARK_STYLE : LIGHT_STYLE}
-      interactiveLayerIds={stopLayerIds}
-      onMouseEnter={handleMouseEnterStop}
-      onMouseLeave={() => setHoveredStop(null)}
     >
       <FlyToFocused />
 
@@ -110,19 +86,6 @@ export default function TransitMap() {
       })}
 
       <LiveVehicles />
-
-      {hoveredStop && (
-        <Popup
-          longitude={hoveredStop.lon}
-          latitude={hoveredStop.lat}
-          closeButton={false}
-          closeOnClick={false}
-          offset={12}
-          style={{ pointerEvents: "none" }}
-        >
-          <span className="text-xs">{hoveredStop.name}</span>
-        </Popup>
-      )}
     </Map>
   );
 }
