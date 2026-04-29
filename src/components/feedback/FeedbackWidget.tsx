@@ -30,7 +30,8 @@ export function FeedbackWidget() {
       setOpen(true);
     }
     window.addEventListener("open-feedback-sheet", openFeedback);
-    return () => window.removeEventListener("open-feedback-sheet", openFeedback);
+    return () =>
+      window.removeEventListener("open-feedback-sheet", openFeedback);
   }, []);
 
   function handleOpenChange(next: boolean) {
@@ -143,7 +144,7 @@ export function FeedbackWidget() {
                       type="button"
                       onClick={() =>
                         setMessage((prev) =>
-                          prev ? prev : p.replace("?", ": ")
+                          prev ? prev : p.replace("?", ": "),
                         )
                       }
                       className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -178,7 +179,10 @@ export function FeedbackWidget() {
                 </div>
 
                 <div className="flex justify-end gap-2 mt-auto">
-                  <Button variant="ghost" onClick={() => handleOpenChange(false)}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleOpenChange(false)}
+                  >
                     Cancel
                   </Button>
                   <Button onClick={submitFeedback} disabled={isSubmitting}>

@@ -31,10 +31,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full`}
       suppressHydrationWarning
     >
-      <body className="h-full flex flex-col">
+      <body className={`${geistSans.className} h-full flex flex-col antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
