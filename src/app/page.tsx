@@ -1,5 +1,3 @@
-"use client";
-
 import MapWrapper from "@/components/map/MapWrapper";
 import { RouteSidebar } from "@/components/sidebar/RouteSidebar";
 import { TimeControls } from "@/components/map/TimeControls";
@@ -15,7 +13,7 @@ export default function Home() {
     <SidebarProvider>
       <div className="flex h-[100svh] w-full">
         <RouteSidebar />
-        <main className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden">
           <SidebarInset className="relative h-[100svh] overflow-hidden">
             <SidebarTrigger
               className="absolute z-[1001] h-12 w-12 rounded-full border bg-background/95 backdrop-blur shadow-lg md:hidden"
@@ -28,7 +26,7 @@ export default function Home() {
             <MapWrapper />
             <TimeControls />
           </SidebarInset>
-        </main>
+        </div>
       </div>
     </SidebarProvider>
   );

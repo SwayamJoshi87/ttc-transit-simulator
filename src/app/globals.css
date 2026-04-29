@@ -48,15 +48,6 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Layout overrides for sidebar + main (no resizable panels) */
-.sidebar-fixed {
-  @apply w-80 flex-shrink-0 overflow-hidden;
-}
-
-.main-fill {
-  @apply flex-1 overflow-hidden;
-}
-
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
