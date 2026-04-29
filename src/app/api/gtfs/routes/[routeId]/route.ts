@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/gtfs/db";
 import {
   routesTable,
@@ -10,6 +10,7 @@ import {
 import type { Route, RouteCacheEntry, Stop, Trip } from "@/store/routeStore";
 
 export const runtime = "nodejs";
+export const revalidate = 86400; // 24h — TTC GTFS updates ~every 6 weeks
 
 function toTrip(row: {
   tripId: string;
@@ -25,29 +26,6 @@ function toTrip(row: {
     tripHeadsign: row.tripHeadsign,
     directionId: Number(row.directionId ?? 0),
   };
-}
-
-function getCanonicalTrips(
-  trips: Trip[],
-  stopCountByTripId: Map<string, number>,
-): Trip[] {
-  const groups = new Map<string, Trip[]>();
-  for (const trip of trips) {
-    const key = `${trip.directionId}|${trip.tripHeadsign}`;
-    const arr = groups.get(key) ?? [];
-    arr.push(trip);
-    groups.set(key, arr);
-  }
-
-  return Array.from(groups.values())
-    .map((group) =>
-      group.reduce((longest, trip) => {
-        const a = stopCountByTripId.get(longest.tripId) ?? 0;
-        const b = stopCountByTripId.get(trip.tripId) ?? 0;
-        return b > a ? trip : longest;
-      }),
-    )
-    .sort((a, b) => a.directionId - b.directionId);
 }
 
 export async function GET(
@@ -76,6 +54,8 @@ export async function GET(
     routeTextColor: routeRow.routeTextColor ?? undefined,
   };
 
+  // Fetch only pre-computed canonical trips — no stop_times COUNT needed.
+  // Requires mark-canonical-trips script to have been run after migration.
   const tripRows = await db
     .select({
       tripId: tripsTable.tripId,
@@ -85,10 +65,13 @@ export async function GET(
       directionId: tripsTable.directionId,
     })
     .from(tripsTable)
-    .where(eq(tripsTable.routeId, routeId));
+    .where(and(eq(tripsTable.routeId, routeId), eq(tripsTable.isCanonical, true)));
 
-  const trips = tripRows.map(toTrip);
-  if (trips.length === 0) {
+  const canonicalTrips = tripRows
+    .map(toTrip)
+    .sort((a, b) => a.directionId - b.directionId);
+
+  if (canonicalTrips.length === 0) {
     const payload: RouteCacheEntry = {
       routeId,
       route,
@@ -99,40 +82,39 @@ export async function GET(
     return Response.json(payload);
   }
 
-  const tripIds = trips.map((t) => t.tripId);
-
-  // One aggregation query to count stops per trip — used to pick the canonical
-  // (longest) trip per direction, without fetching all 800k stop_times rows.
-  const countRows = await db
-    .select({
-      tripId: stopTimesTable.tripId,
-      cnt: sql<number>`cast(count(*) as int)`,
-    })
-    .from(stopTimesTable)
-    .where(inArray(stopTimesTable.tripId, tripIds))
-    .groupBy(stopTimesTable.tripId);
-
-  const stopCountByTripId = new Map(countRows.map((r) => [r.tripId, r.cnt]));
-  const canonicalTrips = getCanonicalTrips(trips, stopCountByTripId);
   const canonicalTripIds = canonicalTrips.map((t) => t.tripId);
   const canonicalShapeIds = Array.from(
     new Set(canonicalTrips.map((t) => t.shapeId).filter(Boolean)),
   );
 
-  // Fetch stops only for canonical trips (2–4 trips instead of all variants).
-  const stopRows = await db
-    .select({
-      tripId: stopTimesTable.tripId,
-      stopId: stopTimesTable.stopId,
-      stopSequence: stopTimesTable.stopSequence,
-      stopName: stopsTable.stopName,
-      stopLat: stopsTable.stopLat,
-      stopLon: stopsTable.stopLon,
-    })
-    .from(stopTimesTable)
-    .innerJoin(stopsTable, eq(stopsTable.stopId, stopTimesTable.stopId))
-    .where(inArray(stopTimesTable.tripId, canonicalTripIds))
-    .orderBy(asc(stopTimesTable.tripId), asc(stopTimesTable.stopSequence));
+  const [stopRows, shapeRows] = await Promise.all([
+    db
+      .select({
+        tripId: stopTimesTable.tripId,
+        stopId: stopTimesTable.stopId,
+        stopSequence: stopTimesTable.stopSequence,
+        stopName: stopsTable.stopName,
+        stopLat: stopsTable.stopLat,
+        stopLon: stopsTable.stopLon,
+      })
+      .from(stopTimesTable)
+      .innerJoin(stopsTable, eq(stopsTable.stopId, stopTimesTable.stopId))
+      .where(inArray(stopTimesTable.tripId, canonicalTripIds))
+      .orderBy(asc(stopTimesTable.tripId), asc(stopTimesTable.stopSequence)),
+
+    canonicalShapeIds.length > 0
+      ? db
+          .select({
+            shapeId: shapesTable.shapeId,
+            shapePtLat: shapesTable.shapePtLat,
+            shapePtLon: shapesTable.shapePtLon,
+            shapePtSequence: shapesTable.shapePtSequence,
+          })
+          .from(shapesTable)
+          .where(inArray(shapesTable.shapeId, canonicalShapeIds))
+          .orderBy(asc(shapesTable.shapeId), asc(shapesTable.shapePtSequence))
+      : Promise.resolve([]),
+  ]);
 
   const stopsByTrip: Record<string, Stop[]> = {};
   for (const row of stopRows) {
@@ -146,33 +128,20 @@ export async function GET(
     });
   }
 
+  const byShapeId: Record<string, RouteCacheEntry["shapesByTrip"][string]> = {};
+  for (const row of shapeRows) {
+    if (!byShapeId[row.shapeId]) byShapeId[row.shapeId] = [];
+    byShapeId[row.shapeId].push({
+      lat: row.shapePtLat,
+      lon: row.shapePtLon,
+      sequence: row.shapePtSequence,
+    });
+  }
+
   const shapesByTrip: Record<string, RouteCacheEntry["shapesByTrip"][string]> =
     {};
-  if (canonicalShapeIds.length > 0) {
-    const shapeRows = await db
-      .select({
-        shapeId: shapesTable.shapeId,
-        shapePtLat: shapesTable.shapePtLat,
-        shapePtLon: shapesTable.shapePtLon,
-        shapePtSequence: shapesTable.shapePtSequence,
-      })
-      .from(shapesTable)
-      .where(inArray(shapesTable.shapeId, canonicalShapeIds))
-      .orderBy(asc(shapesTable.shapeId), asc(shapesTable.shapePtSequence));
-
-    const byShapeId: Record<string, RouteCacheEntry["shapesByTrip"][string]> =
-      {};
-    for (const row of shapeRows) {
-      if (!byShapeId[row.shapeId]) byShapeId[row.shapeId] = [];
-      byShapeId[row.shapeId].push({
-        lat: row.shapePtLat,
-        lon: row.shapePtLon,
-        sequence: row.shapePtSequence,
-      });
-    }
-    for (const trip of canonicalTrips) {
-      shapesByTrip[trip.tripId] = byShapeId[trip.shapeId] ?? [];
-    }
+  for (const trip of canonicalTrips) {
+    shapesByTrip[trip.tripId] = byShapeId[trip.shapeId] ?? [];
   }
 
   const payload: RouteCacheEntry = {

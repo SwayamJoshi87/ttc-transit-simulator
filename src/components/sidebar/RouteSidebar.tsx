@@ -89,15 +89,11 @@ export function RouteSidebar() {
   } = useRouteStore();
   const [search, setSearch] = useState("");
   const [loadingRouteId, setLoadingRouteId] = useState<string | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => window.localStorage.getItem("ttc-simulator-onboarding-seen") !== "1",
+  );
 
   useEffect(() => {
-    const key = "ttc-simulator-onboarding-seen";
-    const hasSeen = window.localStorage.getItem(key) === "1";
-    if (!hasSeen) {
-      setShowOnboarding(true);
-    }
-
     function openTutorial() {
       setShowOnboarding(true);
     }

@@ -11,7 +11,7 @@ A web app for viewing and editing TTC (Toronto Transit Commission) transit route
 | Framework | Next.js 14 (App Router) | SSR, file routing, server components |
 | Map | MapLibre GL JS + react-map-gl v8 | WebGL rendering, no API key, open source |
 | Geocoding | Nominatim (OSM) | Free reverse/forward geocoding, Toronto bbox |
-| Transit data | TTC GTFS static feed | Official TTC data: routes, stops, shapes, trips |
+| Transit data | TTC GTFS static feed + GTFS-RT | Static: routes, stops, shapes, trips; RT: live vehicle positions |
 | Database | PostgreSQL (Aiven) + Drizzle ORM | Stores GTFS data; queried server-side via API routes |
 | State | Zustand (`src/store/routeStore.ts`) | Lightweight, client-only route editing state |
 | UI | shadcn/ui + Tailwind CSS | Accessible components, fast iteration |
@@ -27,9 +27,11 @@ src/
     api/
       gtfs/
         routes/
-          route.ts         # GET /api/gtfs/routes — full route list from DB
+          route.ts         # GET /api/gtfs/routes — full route list from DB (24h edge cache)
           [routeId]/
-            route.ts       # GET /api/gtfs/routes/:id — all trips, stop_times, shapes, calendar
+            route.ts       # GET /api/gtfs/routes/:id — canonical trips, stops, shapes (24h edge cache)
+        vehicles/
+          route.ts         # GET /api/gtfs/vehicles — live positions via TTC GTFS-RT (15s cache)
       feedback/
         route.ts           # POST /api/feedback
   components/
@@ -39,7 +41,7 @@ src/
       TransitMap.tsx       # MapLibre Map: mapStyle + RouteLayers (Sources/Layers) + SimulationSprites
       MapWrapper.tsx       # dynamic() SSR-bypass wrapper (MapLibre is browser-only)
       RouteLayer.tsx       # One route's polylines (3 stacked = glow) + stop markers
-      SimulationSprites.tsx# Per-trip animated markers based on stop_times + sim time
+      SimulationSprites.tsx# LiveVehicles: polls GTFS-RT every 15s; SimulationSprites: stop_times interpolation
       TimeControls.tsx     # Bottom-of-map overlay: play/pause, slider, speed, day, sprites toggle
     sidebar/
       RouteSidebar.tsx     # Routes grouped Subway/Streetcar/Bus, search, pin button,
@@ -71,7 +73,8 @@ DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 To seed the database, download the TTC GTFS feed:
 1. Go to the TTC Open Data portal: https://open.toronto.ca/dataset/ttc-routes-and-schedules/
 2. Download the GTFS zip and extract it
-3. Import the CSV files into the tables defined in `src/lib/gtfs/schema.ts` (`routes`, `trips`, `stops`, `stop_times`, `shapes`, `calendar`)
+3. Run `npm run db:seed` to import all CSV files into the DB
+4. Run `npm run db:mark-canonical` to pre-compute `is_canonical` + `stop_count` on the `trips` table (one-time, required after every GTFS re-seed)
 
 ### Database migrations
 
@@ -108,10 +111,11 @@ const idxs = [
 - **Route colors**: never read `route.routeColor` directly — always go through `getRouteColor(route)` from `src/lib/routeColors.ts`. It handles per-line subway colors (Line 1 yellow, Line 2 green, Line 4 purple), then falls back to GTFS `route_color`, then to per-type defaults (Streetcar red, Bus slate).
 - **shadcn flavor uses `@base-ui/react`, not Radix**: APIs differ — e.g. base-ui Select's `onValueChange` is `(value: string | null) => void` (handle null), Collapsible exposes `data-open` (not `data-state="open"`), triggers accept a `render` prop instead of `asChild`.
 - **Dark mode**: `next-themes` with `attribute="class"`. Tailwind v4 dark variant is wired via `@custom-variant dark (&:is(.dark *))` in `globals.css`. The map swaps to CartoDB Dark Matter vector style URL (light uses CartoDB Voyager) — the `<Map>` component receives `mapStyle` as a prop and re-renders when it changes.
-- **Canonical trip selection**: GTFS routes contain many trip variants (express, short-turn, late-night, test). Picking the *first* trip per direction surfaces these and produces broken visuals (e.g., Line 4 showing only 2 stops). Always reduce to the longest trip per `(directionId, tripHeadsign)` via `getCanonicalTrips()` in `src/lib/gtfs/parser.ts` before exposing trips to the UI.
+- **Canonical trip pre-computation**: GTFS routes contain many trip variants (express, short-turn, late-night, test). The canonical trip per `(directionId, tripHeadsign)` is the one with the most stops. This is pre-computed once by `scripts/mark-canonical-trips.ts` which sets `is_canonical = true` and `stop_count` on the `trips` table. The route API filters `WHERE is_canonical = true` — no runtime COUNT over `stop_times` needed. Run `npm run db:mark-canonical` after every GTFS re-seed.
 - **CSV parsing**: GTFS CSV fields can contain commas inside quotes (e.g., `"Don Mills Stn, Bay 1"`). Always parse via `papaparse` (not naive `.split(",")`) — see `src/lib/gtfs/parser.ts`.
-- **Database indices**: `stop_times(trip_id)`, `trips(route_id)`, and `shapes(shape_id)` all have indices. Without them the `inArray` queries in `app/api/gtfs/routes/[routeId]/route.ts` full-scan tables with 500k–800k rows. Defined in `src/lib/gtfs/schema.ts` and applied to the DB.
-- **Route API data flow**: `GET /api/gtfs/routes/[routeId]` returns the full `RouteCacheEntry` (all trips + stop_times + shapes + calendar) in one request. `RouteSidebar` fetches this on first route click and stores it in `routeCache` (Zustand). `SimulationSprites` reads from `routeCache` — it never calls the API directly.
+- **Database indices**: `stop_times(trip_id)`, `trips(route_id)`, `trips(route_id, is_canonical)`, and `shapes(shape_id)` all have indices. Without them the `inArray` queries full-scan tables with 500k–800k rows. Defined in `src/lib/gtfs/schema.ts`.
+- **Route API data flow**: `GET /api/gtfs/routes/[routeId]` returns `RouteCacheEntry` (canonical trips + stops + shapes) in one request; stops and shapes are fetched in parallel via `Promise.all`. `RouteSidebar` fetches on first route click and caches in Zustand. Both route API routes set `revalidate = 86400` (24h edge cache) since GTFS updates ~every 6 weeks.
+- **Live vehicles**: `GET /api/gtfs/vehicles` proxies TTC's official GTFS-RT feed at `https://gtfsrt.ttc.ca/vehicles/position`. The base URL is discovered from the Toronto Open Data CKAN package (`9ab4c9af-652f-4a84-abac-afcf40aae882`) on first request and cached for the process lifetime. Subway lines are absent from this feed — TTC does not publish subway GPS positions in GTFS-RT.
 
 ## Scope
 
@@ -131,6 +135,11 @@ const idxs = [
 - [x] PostgreSQL database backend with Drizzle ORM (replaced flat-file GTFS reads)
 - [x] Per-route API (`/api/gtfs/routes/[routeId]`) serving trips, stop_times, shapes, calendar on demand
 - [x] DB indices on `stop_times(trip_id)`, `trips(route_id)`, `shapes(shape_id)` for fast route loads
+- [x] Live vehicle positions from TTC GTFS-RT feed (buses + streetcars, 15s poll)
+- [x] GTFS-RT feed URL discovered from Toronto Open Data CKAN API (resilient to URL changes)
+- [x] Canonical trip pre-computation (`is_canonical` + `stop_count` on `trips` table) — eliminates runtime COUNT over stop_times
+- [x] 24h edge cache on route list and per-route detail API routes
+- [x] Stops and shapes fetched in parallel on route load
 
 ### To Do
 - [ ] Edit mode: drag stops to new positions

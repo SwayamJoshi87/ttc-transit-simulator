@@ -38,19 +38,16 @@ export function ThemeProvider({
   enableSystem = true,
   attribute = "class",
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(defaultTheme);
+  const [theme, setThemeState] = React.useState<Theme>(() => {
+    if (typeof window === "undefined") return defaultTheme;
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return saved === "light" || saved === "dark" || saved === "system"
+      ? saved
+      : defaultTheme;
+  });
   const [resolvedTheme, setResolvedTheme] = React.useState<"light" | "dark">(
     "light",
   );
-
-  React.useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    const nextTheme =
-      saved === "light" || saved === "dark" || saved === "system"
-        ? saved
-        : defaultTheme;
-    setThemeState(nextTheme);
-  }, [defaultTheme]);
 
   React.useEffect(() => {
     const update = () => {

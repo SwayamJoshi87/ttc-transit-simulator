@@ -243,12 +243,6 @@ async function seedCalendar() {
   }
 }
 
-async function truncateAll() {
-  await db.execute(
-    sql`TRUNCATE TABLE stop_times, shapes, trips, stops, calendar, routes`,
-  );
-}
-
 async function main() {
   await ensureTables();
 

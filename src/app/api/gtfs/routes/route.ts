@@ -4,6 +4,7 @@ import { routesTable } from "@/lib/gtfs/schema";
 import type { Route } from "@/store/routeStore";
 
 export const runtime = "nodejs";
+export const revalidate = 86400; // 24h — TTC GTFS updates ~every 6 weeks
 
 export async function GET() {
   const rows = await db

@@ -63,10 +63,7 @@ export function LiveVehicles() {
 
   // Poll immediately when active routes change, then on a fixed interval.
   useEffect(() => {
-    if (!showVehicles) {
-      setGeojson({ type: "FeatureCollection", features: [] });
-      return;
-    }
+    if (!showVehicles) return;
     void poll();
     const id = setInterval(() => void poll(), POLL_INTERVAL_MS);
     return () => clearInterval(id);

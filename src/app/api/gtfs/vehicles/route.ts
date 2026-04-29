@@ -2,7 +2,8 @@ import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 
 export const runtime = "nodejs";
 
-const FEED_URL = "https://bustime.ttc.ca/gtfsrt/vehicles";
+const CKAN_PACKAGE_ID = "9ab4c9af-652f-4a84-abac-afcf40aae882";
+const CKAN_API = `https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/package_show?id=${CKAN_PACKAGE_ID}`;
 
 export interface VehiclePosition {
   vehicleId: string;
@@ -12,8 +13,38 @@ export interface VehiclePosition {
   bearing: number;
 }
 
+// Resolved once per process lifetime from the CKAN package metadata.
+let feedBaseUrl: string | null = null;
+
+async function getFeedBaseUrl(): Promise<string> {
+  if (feedBaseUrl) return feedBaseUrl;
+
+  const resp = await fetch(CKAN_API, {
+    headers: { "User-Agent": "TTC-Transit-Simulator/1.0" },
+  });
+  if (!resp.ok) throw new Error(`CKAN lookup failed: ${resp.status}`);
+
+  const pkg = await resp.json();
+  const resources: { url: string }[] = pkg?.result?.resources ?? [];
+  const resource = resources[0];
+  if (!resource?.url) throw new Error("No resource URL found in CKAN package");
+
+  feedBaseUrl = resource.url.replace(/\/$/, "");
+  return feedBaseUrl;
+}
+
 export async function GET() {
-  const resp = await fetch(FEED_URL, {
+  let baseUrl: string;
+  try {
+    baseUrl = await getFeedBaseUrl();
+  } catch {
+    return Response.json(
+      { error: "Failed to resolve GTFS-RT feed URL" },
+      { status: 502 },
+    );
+  }
+
+  const resp = await fetch(`${baseUrl}/vehicles/position?format=binary`, {
     next: { revalidate: 15 },
     headers: { "User-Agent": "TTC-Transit-Simulator/1.0" },
   });

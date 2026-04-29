@@ -27,8 +27,13 @@ export const tripsTable = pgTable(
     tripHeadsign: text("trip_headsign").notNull(),
     directionId: integer("direction_id"),
     shapeId: text("shape_id").notNull(),
+    stopCount: integer("stop_count"),
+    isCanonical: boolean("is_canonical").notNull().default(false),
   },
-  (t) => [index("trips_route_id_idx").on(t.routeId)],
+  (t) => [
+    index("trips_route_id_idx").on(t.routeId),
+    index("trips_canonical_idx").on(t.routeId, t.isCanonical),
+  ],
 );
 
 export const stopsTable = pgTable("stops", {

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx scripts/seed-gtfs.ts"
+    "db:seed": "tsx scripts/seed-gtfs.ts",
+    "db:mark-canonical": "tsx scripts/mark-canonical-trips.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
