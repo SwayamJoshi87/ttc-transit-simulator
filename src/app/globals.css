@@ -49,6 +49,14 @@
 }
 
 /* React Resizable Panels Styles */
+[data-group] {
+  @apply w-full h-full;
+}
+
+[data-panel] {
+  @apply h-full;
+}
+
 [data-separator] {
   @apply bg-border hover:bg-primary/40 transition-colors;
   @apply cursor-col-resize;
