@@ -256,13 +256,17 @@ export function RouteSidebar() {
                 text: "Switch direction using the Direction selector for the focused route.",
               },
             ].map(({ icon, text }, i) => (
-              <div key={i} className="flex items-start gap-2.5 text-sm rounded-lg px-2 py-1.5 bg-muted/50">
+              <div
+                key={i}
+                className="flex items-start gap-2.5 text-sm rounded-lg px-2 py-1.5 bg-muted/50"
+              >
                 <span className="text-muted-foreground">{icon}</span>
                 <span>{text}</span>
               </div>
             ))}
             <p className="text-xs text-muted-foreground pt-1 px-1">
-              Route data may take a moment to load. This is an early build — feedback is welcome via the button in the top-right.
+              Route data may take a moment to load. This is an early build —
+              feedback is welcome via the button in the top-right.
             </p>
           </div>
 
@@ -275,57 +279,59 @@ export function RouteSidebar() {
         </SheetContent>
       </Sheet>
 
-      <Sidebar>
-        <SidebarHeader className="border-b">
-          <div className="flex items-center justify-between gap-2 px-1 py-1">
-            <div className="flex flex-col">
-              <span className="font-semibold text-sm">TTC Simulator</span>
-              <span className="text-[11px] text-muted-foreground">
+      <Sidebar className="flex flex-col">
+        <SidebarHeader className="border-b bg-gradient-to-b from-sidebar/50 to-transparent py-4">
+          <div className="flex items-center justify-between gap-3 px-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="font-bold text-base leading-tight">
+                TTC Simulator
+              </span>
+              <span className="text-[10px] text-muted-foreground font-medium">
                 Transit route editor
               </span>
             </div>
             <ThemeToggle />
           </div>
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <div className="relative mt-3 px-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search routes…"
-              className="pl-7 h-8 text-xs"
+              className="pl-8 h-9 text-xs bg-muted/50 border-muted-foreground/20 focus:bg-background"
             />
           </div>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent className="flex-1">
           {/* Active routes summary */}
           {activeRoutesList.length > 0 && (
-            <SidebarGroup>
-              <SidebarGroupLabel>
+            <SidebarGroup className="py-3">
+              <SidebarGroupLabel className="mb-3 px-3">
                 <div className="flex items-center justify-between gap-2 w-full">
-                  <span className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-2 font-semibold text-sm">
                     Active
                     <Badge
                       variant="secondary"
-                      className="text-[10px] h-4 px-1.5"
+                      className="text-[10px] h-5 px-2 font-bold"
                     >
                       {activeRoutesList.length}
                     </Badge>
                   </span>
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="sm"
-                    className="h-7 text-[11px] px-2.5"
+                    className="h-6 text-[10px] px-2"
                     onClick={resetAllRoutes}
                     title="Reset all active routes"
                   >
                     <RotateCcw className="h-3 w-3 mr-1" />
-                    Reset All
+                    Reset
                   </Button>
                 </div>
               </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <div className="flex flex-wrap gap-1 px-1">
+              <SidebarGroupContent className="px-2">
+                <div className="flex flex-wrap gap-1.5">
                   {activeRoutesList.map((routeId) => {
                     const route = routes.find((r) => r.routeId === routeId);
                     if (!route) return null;
@@ -335,10 +341,10 @@ export function RouteSidebar() {
                       <button
                         key={routeId}
                         onClick={() => setFocusedRoute(routeId)}
-                        className={`group flex items-center gap-1 rounded-md text-[10px] font-bold px-1.5 h-5 text-white transition-all ${
+                        className={`group flex items-center gap-1 rounded-lg text-[10px] font-bold px-2 h-6 text-white transition-all duration-200 ${
                           isFocused
-                            ? "ring-2 ring-offset-1 ring-offset-sidebar"
-                            : "opacity-70 hover:opacity-100"
+                            ? "ring-2 ring-offset-1 ring-offset-sidebar shadow-md"
+                            : "opacity-75 hover:opacity-100 shadow-sm"
                         }`}
                         style={{
                           backgroundColor: color,
@@ -349,7 +355,7 @@ export function RouteSidebar() {
                       >
                         <span>{route.routeShortName}</span>
                         <X
-                          className="h-2.5 w-2.5 opacity-60 hover:opacity-100"
+                          className="h-3 w-3 opacity-70 hover:opacity-100 group-hover:scale-110 transition-transform"
                           onClick={(e) => {
                             e.stopPropagation();
                             removeActiveRoute(routeId);
@@ -376,126 +382,138 @@ export function RouteSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
           ) : (
-            ROUTE_TYPE_GROUPS.map(({ type, label }) => {
-              const groupRoutes = routesByType.get(type) ?? [];
-              if (groupRoutes.length === 0) return null;
-              const Icon = TYPE_ICON[type];
+            <div className="space-y-2 px-1">
+              {ROUTE_TYPE_GROUPS.map(({ type, label }) => {
+                const groupRoutes = routesByType.get(type) ?? [];
+                if (groupRoutes.length === 0) return null;
+                const Icon = TYPE_ICON[type];
 
-              return (
-                <Collapsible
-                  key={type}
-                  defaultOpen={type !== 3}
-                  className="group/collapsible"
-                >
-                  <SidebarGroup>
-                    <SidebarGroupLabel
-                      render={
-                        <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:text-sidebar-foreground" />
-                      }
-                    >
-                      <span className="flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5" />
-                        {label}
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] h-4 px-1.5"
-                        >
-                          {groupRoutes.length}
-                        </Badge>
-                      </span>
-                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-data-[open]/collapsible:rotate-90" />
-                    </SidebarGroupLabel>
-                    <CollapsibleContent>
-                      <SidebarGroupContent>
-                        <SidebarMenu>
-                          {groupRoutes.map((route) => {
-                            const isFocused = route.routeId === focusedRouteId;
-                            const isActive = activeRoutes.has(route.routeId);
-                            const isPinned = pinnedRouteIds.has(route.routeId);
-                            const color = getRouteColor(route);
-                            return (
-                              <SidebarMenuItem
-                                key={route.routeId}
-                                className="group/item relative"
-                              >
-                                <SidebarMenuButton
-                                  isActive={isFocused}
-                                  onClick={() => {
-                                    void activateRoute(route.routeId);
-                                  }}
-                                  tooltip={`${route.routeShortName} ${route.routeLongName}`}
-                                  className="pr-8"
+                return (
+                  <Collapsible
+                    key={type}
+                    defaultOpen={type !== 3}
+                    className="group/collapsible rounded-lg border bg-card/30 hover:bg-card/50 transition-colors"
+                  >
+                    <SidebarGroup className="py-0">
+                      <SidebarGroupLabel
+                        render={
+                          <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:bg-muted/30 px-3 py-2.5 rounded-lg transition-colors" />
+                        }
+                      >
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-sm">{label}</span>
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] h-5 px-1.5 font-bold ml-auto"
+                          >
+                            {groupRoutes.length}
+                          </Badge>
+                        </span>
+                        <ChevronRight className="h-4 w-4 transition-transform group-data-[open]/collapsible:rotate-90" />
+                      </SidebarGroupLabel>
+                      <CollapsibleContent>
+                        <SidebarGroupContent className="pt-1">
+                          <SidebarMenu>
+                            {groupRoutes.map((route) => {
+                              const isFocused =
+                                route.routeId === focusedRouteId;
+                              const isActive = activeRoutes.has(route.routeId);
+                              const isPinned = pinnedRouteIds.has(
+                                route.routeId,
+                              );
+                              const color = getRouteColor(route);
+                              return (
+                                <SidebarMenuItem
+                                  key={route.routeId}
+                                  className="group/item relative"
                                 >
-                                  <span
-                                    className="flex items-center justify-center text-[10px] font-bold rounded-md min-w-[28px] h-5 px-1 flex-shrink-0 text-white"
-                                    style={{ backgroundColor: color }}
-                                  >
-                                    {route.routeShortName}
-                                  </span>
-                                  <span className="truncate text-xs">
-                                    {route.routeLongName}
-                                  </span>
-                                </SidebarMenuButton>
-                                {isActive && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (!isPinned) {
-                                        // Pin first so we don't lose this route from the active set.
-                                        togglePin(route.routeId);
-                                      } else {
-                                        togglePin(route.routeId);
-                                      }
+                                  <SidebarMenuButton
+                                    isActive={isFocused}
+                                    onClick={() => {
+                                      void activateRoute(route.routeId);
                                     }}
-                                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-md transition-colors ${
-                                      isPinned
-                                        ? "text-foreground bg-accent"
-                                        : "text-muted-foreground opacity-0 group-hover/item:opacity-100 hover:bg-accent"
-                                    }`}
-                                    title={
-                                      isPinned
-                                        ? "Unpin route"
-                                        : "Pin route to keep visible"
-                                    }
+                                    tooltip={`${route.routeShortName} ${route.routeLongName}`}
+                                    className="pr-8 py-2 my-0.5"
                                   >
-                                    {isPinned ? (
-                                      <Pin className="h-3 w-3 fill-current" />
-                                    ) : (
-                                      <PinOff className="h-3 w-3" />
-                                    )}
-                                  </button>
-                                )}
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
-                      </SidebarGroupContent>
-                    </CollapsibleContent>
-                  </SidebarGroup>
-                </Collapsible>
-              );
-            })
+                                    <span
+                                      className="flex items-center justify-center text-[11px] font-bold rounded-md min-w-[28px] h-6 px-1.5 flex-shrink-0 text-white shadow-sm"
+                                      style={{ backgroundColor: color }}
+                                    >
+                                      {route.routeShortName}
+                                    </span>
+                                    <span className="truncate text-xs font-medium">
+                                      {route.routeLongName}
+                                    </span>
+                                  </SidebarMenuButton>
+                                  {isActive && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isPinned) {
+                                          // Pin first so we don't lose this route from the active set.
+                                          togglePin(route.routeId);
+                                        } else {
+                                          togglePin(route.routeId);
+                                        }
+                                      }}
+                                      className={`absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-md transition-all ${
+                                        isPinned
+                                          ? "text-foreground bg-accent shadow-sm"
+                                          : "text-muted-foreground opacity-0 group-hover/item:opacity-100 hover:bg-accent/50"
+                                      }`}
+                                      title={
+                                        isPinned
+                                          ? "Unpin route"
+                                          : "Pin route to keep visible"
+                                      }
+                                    >
+                                      {isPinned ? (
+                                        <Pin className="h-3.5 w-3.5 fill-current" />
+                                      ) : (
+                                        <PinOff className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )}
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </SidebarMenu>
+                        </SidebarGroupContent>
+                      </CollapsibleContent>
+                    </SidebarGroup>
+                  </Collapsible>
+                );
+              })}
+            </div>
           )}
 
           {!isLoading && filteredRoutes.length === 0 && (
-            <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-              No routes match &quot;{search}&quot;
+            <div className="flex items-center justify-center px-4 py-12 text-center">
+              <div className="space-y-2">
+                <Search className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                <p className="text-xs text-muted-foreground font-medium">
+                  No routes match
+                  <br />
+                  &quot;{search}&quot;
+                </p>
+              </div>
             </div>
           )}
         </SidebarContent>
 
         {focusedRoute && focusedActive && (
-          <SidebarFooter className="border-t">
-            <div className="px-1 space-y-3">
-              <div className="flex items-center gap-2">
+          <SidebarFooter className="border-t bg-gradient-to-t from-sidebar/30 to-transparent py-3">
+            <div className="px-2 space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b">
                 <span
-                  className="flex items-center justify-center text-[10px] font-bold rounded-md min-w-[28px] h-5 px-1 flex-shrink-0 text-white"
+                  className="flex items-center justify-center text-[11px] font-bold rounded-md min-w-[28px] h-6 px-1.5 flex-shrink-0 text-white shadow-sm"
                   style={{ backgroundColor: getRouteColor(focusedRoute) }}
                 >
                   {focusedRoute.routeShortName}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">
+                  <p className="text-xs font-semibold truncate">
                     {focusedRoute.routeLongName}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
@@ -505,22 +523,22 @@ export function RouteSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-8 w-8 hover:bg-accent/50"
                   onClick={() => togglePin(focusedRoute.routeId)}
                   title={
                     pinnedRouteIds.has(focusedRoute.routeId) ? "Unpin" : "Pin"
                   }
                 >
                   {pinnedRouteIds.has(focusedRoute.routeId) ? (
-                    <Pin className="h-3.5 w-3.5 fill-current" />
+                    <Pin className="h-4 w-4 fill-current text-accent" />
                   ) : (
-                    <PinOff className="h-3.5 w-3.5" />
+                    <PinOff className="h-4 w-4" />
                   )}
                 </Button>
                 <Button
                   variant={isStopEditMode ? "default" : "ghost"}
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-8 w-8"
                   onClick={() => setStopEditMode(!isStopEditMode)}
                   title={
                     isStopEditMode
@@ -528,7 +546,7 @@ export function RouteSidebar() {
                       : "Enable stop dragging"
                   }
                 >
-                  <Move className="h-3.5 w-3.5" />
+                  <Move className="h-4 w-4" />
                 </Button>
               </div>
 
@@ -539,7 +557,7 @@ export function RouteSidebar() {
               )}
 
               <div>
-                <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">
+                <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-widest">
                   Direction
                 </p>
                 <Select
@@ -548,12 +566,16 @@ export function RouteSidebar() {
                     if (v) changeTrip(focusedRoute.routeId, v);
                   }}
                 >
-                  <SelectTrigger className="w-full text-xs h-8">
+                  <SelectTrigger className="w-full text-xs h-8 bg-muted/50 border-muted-foreground/20">
                     <SelectValue placeholder="Select direction" />
                   </SelectTrigger>
                   <SelectContent>
                     {focusedActive.trips.map((t) => (
-                      <SelectItem key={t.tripId} value={t.tripId} className="text-xs">
+                      <SelectItem
+                        key={t.tripId}
+                        value={t.tripId}
+                        className="text-xs"
+                      >
                         {t.tripHeadsign || `Direction ${t.directionId}`}
                       </SelectItem>
                     ))}
@@ -563,22 +585,24 @@ export function RouteSidebar() {
 
               {focusedActive.stops.length > 0 && (
                 <>
-                  <Separator />
+                  <Separator className="my-2" />
                   <div>
-                    <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">
+                    <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-widest">
                       {focusedActive.stops.length} Stops
                     </p>
-                    <ScrollArea className="h-32">
-                      <div className="space-y-0.5 pr-2">
+                    <ScrollArea className="h-40 rounded-lg border border-muted/50 bg-muted/30 p-2">
+                      <div className="space-y-1">
                         {focusedActive.stops.map((stop, i) => (
                           <div
                             key={`${stop.stopId}-${stop.sequence}-${i}`}
-                            className="flex items-center gap-2 text-[11px] py-0.5"
+                            className="flex items-start gap-2 text-[11px] py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors group/stop"
                           >
-                            <span className="text-muted-foreground w-5 text-right flex-shrink-0">
-                              {i + 1}
+                            <span className="text-muted-foreground w-5 text-right flex-shrink-0 font-semibold">
+                              {String(i + 1).padStart(2, "0")}
                             </span>
-                            <span className="truncate">{stop.stopName}</span>
+                            <span className="truncate text-muted-foreground group-hover/stop:text-foreground transition-colors">
+                              {stop.stopName}
+                            </span>
                           </div>
                         ))}
                       </div>

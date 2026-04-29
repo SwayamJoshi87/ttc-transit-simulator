@@ -48,6 +48,23 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* React Resizable Panels Styles */
+[data-group-direction="horizontal"] > div:nth-child(even) {
+  @apply border-l border-border;
+}
+
+[data-group-direction="vertical"] > div:nth-child(even) {
+  @apply border-t border-border;
+}
+
+[data-separator] {
+  @apply bg-border w-1 hover:bg-primary/30 transition-colors;
+  @apply cursor-col-resize;
+  @apply data-[active]:bg-primary/50;
+  @apply z-50 relative;
+  @apply pointer-events-auto;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
