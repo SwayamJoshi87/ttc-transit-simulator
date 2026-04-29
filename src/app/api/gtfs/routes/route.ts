@@ -6,6 +6,11 @@ import type { Route } from "@/store/routeStore";
 export const runtime = "nodejs";
 export const revalidate = 86400; // 24h — TTC GTFS updates ~every 6 weeks
 
+const CACHE_HEADERS = {
+  "Cache-Control":
+    "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
+};
+
 export async function GET() {
   const rows = await db
     .select()
@@ -25,5 +30,5 @@ export async function GET() {
     routeTextColor: row.routeTextColor ?? undefined,
   }));
 
-  return Response.json({ routes });
+  return Response.json({ routes }, { headers: CACHE_HEADERS });
 }

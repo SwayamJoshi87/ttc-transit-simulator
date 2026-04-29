@@ -67,6 +67,21 @@ const TYPE_ICON: Record<number, React.ComponentType<{ className?: string }>> = {
   3: Bus,
 };
 
+const ROUTE_DETAILS_DEFAULT_HEIGHT = 310;
+const ROUTE_DETAILS_MIN_HEIGHT = 220;
+const ROUTE_DETAILS_MAX_VIEWPORT_RATIO = 0.72;
+
+function clampRouteDetailsHeight(height: number) {
+  const viewportMax =
+    typeof window === "undefined"
+      ? 520
+      : Math.round(window.innerHeight * ROUTE_DETAILS_MAX_VIEWPORT_RATIO);
+  const maxHeight = Math.max(ROUTE_DETAILS_MIN_HEIGHT, viewportMax);
+  return Math.round(
+    Math.min(maxHeight, Math.max(ROUTE_DETAILS_MIN_HEIGHT, height)),
+  );
+}
+
 export function RouteSidebar() {
   const {
     routes,
@@ -89,6 +104,9 @@ export function RouteSidebar() {
   } = useRouteStore();
   const [search, setSearch] = useState("");
   const [loadingRouteId, setLoadingRouteId] = useState<string | null>(null);
+  const [routeDetailsHeight, setRouteDetailsHeight] = useState(
+    ROUTE_DETAILS_DEFAULT_HEIGHT,
+  );
   const [showOnboarding, setShowOnboarding] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -189,6 +207,34 @@ export function RouteSidebar() {
     const stops = cached.stopsByTrip[tripId] ?? [];
     const shapes = cached.shapesByTrip[tripId] ?? [];
     setActiveTrip(routeId, tripId, stops, shapes);
+  }
+
+  function startRouteDetailsResize(
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) {
+    if (event.button !== 0) return;
+
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const startY = event.clientY;
+    const startHeight = routeDetailsHeight;
+    handle.setPointerCapture(pointerId);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setRouteDetailsHeight(
+        clampRouteDetailsHeight(startHeight + startY - moveEvent.clientY),
+      );
+    };
+
+    const handlePointerUp = () => {
+      handle.releasePointerCapture(pointerId);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
   const filteredRoutes = useMemo(() => {
@@ -503,8 +549,23 @@ export function RouteSidebar() {
         </SidebarContent>
 
         {focusedRoute && focusedActive && (
-          <SidebarFooter className="border-t bg-gradient-to-t from-sidebar/30 to-transparent py-3">
-            <div className="px-2 space-y-3">
+          <SidebarFooter
+            className="relative min-h-0 border-t bg-gradient-to-t from-sidebar/30 to-transparent p-0"
+            style={{ height: routeDetailsHeight }}
+          >
+            <button
+              type="button"
+              aria-label="Resize route details area"
+              title="Drag to resize route details area. Double-click to reset."
+              onPointerDown={startRouteDetailsResize}
+              onDoubleClick={() =>
+                setRouteDetailsHeight(ROUTE_DETAILS_DEFAULT_HEIGHT)
+              }
+              className="absolute -top-2 left-0 z-10 flex h-4 w-full cursor-ns-resize touch-none items-center justify-center focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="h-1 w-12 rounded-full bg-sidebar-border opacity-80" />
+            </button>
+            <div className="flex h-full min-h-0 flex-col px-2 pb-3 pt-4">
               <div className="flex items-center gap-2 pb-2 border-b">
                 <span
                   className="flex items-center justify-center text-[11px] font-bold rounded-md min-w-[28px] h-6 px-1.5 flex-shrink-0 text-white shadow-sm"
@@ -556,7 +617,7 @@ export function RouteSidebar() {
                 </p>
               )}
 
-              <div>
+              <div className="shrink-0">
                 <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-widest">
                   Direction
                 </p>
@@ -586,11 +647,11 @@ export function RouteSidebar() {
               {focusedActive.stops.length > 0 && (
                 <>
                   <Separator className="my-2" />
-                  <div>
+                  <div className="flex min-h-0 flex-1 flex-col">
                     <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-widest">
                       {focusedActive.stops.length} Stops
                     </p>
-                    <ScrollArea className="h-40 rounded-lg border border-muted/50 bg-muted/30 p-2">
+                    <ScrollArea className="min-h-0 flex-1 rounded-lg border border-muted/50 bg-muted/30 p-2">
                       <div className="space-y-1">
                         {focusedActive.stops.map((stop, i) => (
                           <div

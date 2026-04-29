@@ -12,6 +12,11 @@ import type { Route, RouteCacheEntry, Stop, Trip } from "@/store/routeStore";
 export const runtime = "nodejs";
 export const revalidate = 86400; // 24h — TTC GTFS updates ~every 6 weeks
 
+const CACHE_HEADERS = {
+  "Cache-Control":
+    "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
+};
+
 function toTrip(row: {
   tripId: string;
   routeId: string;
@@ -79,7 +84,7 @@ export async function GET(
       stopsByTrip: {},
       shapesByTrip: {},
     };
-    return Response.json(payload);
+    return Response.json(payload, { headers: CACHE_HEADERS });
   }
 
   const canonicalTripIds = canonicalTrips.map((t) => t.tripId);
@@ -152,5 +157,5 @@ export async function GET(
     shapesByTrip,
   };
 
-  return Response.json(payload);
+  return Response.json(payload, { headers: CACHE_HEADERS });
 }

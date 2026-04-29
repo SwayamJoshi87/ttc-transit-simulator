@@ -15,6 +15,13 @@
       "when": 1777421200106,
       "tag": "0001_woozy_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777422600000,
+      "tag": "0002_ordered_gtfs_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -52,7 +52,10 @@ export const stopTimesTable = pgTable(
     arrivalTime: text("arrival_time").notNull(),
     departureTime: text("departure_time").notNull(),
   },
-  (t) => [index("stop_times_trip_id_idx").on(t.tripId)],
+  (t) => [
+    index("stop_times_trip_id_idx").on(t.tripId),
+    index("stop_times_trip_sequence_idx").on(t.tripId, t.stopSequence),
+  ],
 );
 
 export const shapesTable = pgTable(
@@ -63,7 +66,10 @@ export const shapesTable = pgTable(
     shapePtLon: real("shape_pt_lon").notNull(),
     shapePtSequence: integer("shape_pt_sequence").notNull(),
   },
-  (t) => [index("shapes_shape_id_idx").on(t.shapeId)],
+  (t) => [
+    index("shapes_shape_id_idx").on(t.shapeId),
+    index("shapes_shape_sequence_idx").on(t.shapeId, t.shapePtSequence),
+  ],
 );
 
 export const calendarTable = pgTable("calendar", {
