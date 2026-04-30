@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, CheckCircle2, MessageSquare, Send, X } from "lucide-react";
+import { BookOpen, CheckCircle2, MessageSquare, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 const PROMPTS = [
   "Something broken?",
@@ -25,15 +33,6 @@ export function FeedbackWidget() {
     return () =>
       window.removeEventListener("open-feedback-sheet", openFeedback);
   }, []);
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && open) handleOpenChange(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -80,184 +79,122 @@ export function FeedbackWidget() {
   }
 
   return (
-    <>
-      <div
-        className="absolute z-[1000] flex items-center gap-2"
-        style={{
-          top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)",
-          right: "calc(env(safe-area-inset-right, 0px) + 0.75rem)",
-        }}
+    <div
+      className="absolute z-[1000] flex items-center gap-2"
+      style={{
+        top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)",
+        right: "calc(env(safe-area-inset-right, 0px) + 0.75rem)",
+      }}
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-9 rounded-full bg-background/95 px-3 backdrop-blur shadow-lg md:h-8 md:rounded-md"
+        onClick={() => window.dispatchEvent(new Event("open-tutorial"))}
       >
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 rounded-full bg-background/95 px-3 backdrop-blur shadow-lg md:h-8 md:rounded-md"
-          onClick={() => window.dispatchEvent(new Event("open-tutorial"))}
-        >
-          <BookOpen className="h-3.5 w-3.5 mr-1" />
-          Tutorial
-        </Button>
+        <BookOpen className="h-3.5 w-3.5 mr-1" />
+        Tutorial
+      </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 rounded-full bg-background/95 px-3 backdrop-blur shadow-lg md:h-8 md:rounded-md"
-          onClick={() => setOpen(true)}
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetTrigger
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-full bg-background/95 px-3 backdrop-blur shadow-lg md:h-8 md:rounded-md"
+            />
+          }
         >
           <MessageSquare className="h-3.5 w-3.5 mr-1" />
           Feedback
-        </Button>
-      </div>
+        </SheetTrigger>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[1100] flex items-center justify-center p-4 sm:p-8"
-          style={{
-            backdropFilter: "blur(6px)",
-            WebkitBackdropFilter: "blur(6px)",
-            backgroundColor: "rgba(0,0,0,0.50)",
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) handleOpenChange(false);
-          }}
-        >
-          <div
-            className="relative w-full max-w-2xl flex flex-col rounded-2xl overflow-hidden shadow-2xl"
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              backdropFilter: "blur(48px) saturate(160%)",
-              WebkitBackdropFilter: "blur(48px) saturate(160%)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              maxHeight: "min(85vh, 640px)",
-            }}
-          >
-            <button
-              onClick={() => handleOpenChange(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
+        <SheetContent side="right" className="sm:max-w-md flex flex-col">
+          <SheetHeader>
+            <SheetTitle>Share feedback</SheetTitle>
+            <SheetDescription>
+              Help shape the simulator — bugs, ideas, or anything on your mind.
+            </SheetDescription>
+          </SheetHeader>
 
-            <div
-              className="px-8 pt-8 pb-5"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.10)" }}
-            >
-              <div className="flex items-center gap-2.5 mb-1">
-                <MessageSquare className="h-5 w-5 text-white/75" />
-                <h2 className="text-lg font-semibold text-white tracking-tight">
-                  Share feedback
-                </h2>
-              </div>
-              <p className="text-sm text-white/55 pl-7">
-                Help shape the simulator — bugs, ideas, or anything on your
-                mind.
-              </p>
-            </div>
-
-            <div className="flex-1 px-8 py-6 flex flex-col gap-5 overflow-y-auto min-h-0">
-              {submitted ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                  <CheckCircle2 className="h-12 w-12 text-emerald-400" />
-                  <p className="font-semibold text-white text-lg">
-                    Thanks for your feedback!
-                  </p>
-                  <p className="text-sm text-white/55">
-                    We read everything and use it to improve the simulator.
-                  </p>
-                  <Button
-                    size="sm"
-                    className="mt-2 bg-white/10 hover:bg-white/20 text-white border border-white/20"
-                    onClick={() => handleOpenChange(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    {PROMPTS.map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() =>
-                          setMessage((prev) =>
-                            prev ? prev : p.replace("?", ": "),
-                          )
-                        }
-                        className="rounded-full px-3 py-1 text-xs text-white/55 hover:text-white/90 hover:bg-white/10 transition-colors"
-                        style={{ border: "1px solid rgba(255,255,255,0.18)" }}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <textarea
-                      id="feedback-message"
-                      value={message}
-                      onChange={(e) => {
-                        setMessage(e.target.value);
-                        if (error) setError(null);
-                      }}
-                      placeholder="Tell us what's on your mind..."
-                      className="w-full min-h-[180px] resize-none rounded-xl px-4 py-3 text-sm text-white outline-none transition-colors"
-                      style={{
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px solid rgba(255,255,255,0.13)",
-                        caretColor: "white",
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.border =
-                          "1px solid rgba(255,255,255,0.30)";
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.border =
-                          "1px solid rgba(255,255,255,0.13)";
-                      }}
-                      maxLength={2000}
-                    />
-                    <div className="flex items-center justify-between">
-                      {error ? (
-                        <p className="text-xs text-red-400">{error}</p>
-                      ) : (
-                        <span />
-                      )}
-                      <span className="text-[11px] text-white/35">
-                        {message.length}/2000
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {!submitted && (
-              <div
-                className="px-8 py-5 flex justify-end gap-3"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.10)" }}
-              >
+          <div className="flex-1 px-4 flex flex-col gap-4">
+            {submitted ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+                <p className="font-medium">Thanks for your feedback!</p>
+                <p className="text-sm text-muted-foreground">
+                  We read everything and use it to improve the simulator.
+                </p>
                 <Button
-                  variant="ghost"
-                  className="text-white/60 hover:text-white hover:bg-white/10"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
                   onClick={() => handleOpenChange(false)}
                 >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={submitFeedback}
-                  disabled={isSubmitting}
-                  className="bg-white/15 hover:bg-white/25 text-white border border-white/20 disabled:opacity-50"
-                >
-                  <Send className="h-3.5 w-3.5 mr-1.5" />
-                  {isSubmitting ? "Sending…" : "Send feedback"}
+                  Close
                 </Button>
               </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  {PROMPTS.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() =>
+                        setMessage((prev) =>
+                          prev ? prev : p.replace("?", ": "),
+                        )
+                      }
+                      className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <textarea
+                    id="feedback-message"
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    placeholder="Tell us what's on your mind..."
+                    className="w-full min-h-40 resize-none rounded-lg border bg-muted/40 px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                    maxLength={2000}
+                  />
+                  <div className="flex items-center justify-between">
+                    {error ? (
+                      <p className="text-xs text-destructive">{error}</p>
+                    ) : (
+                      <span />
+                    )}
+                    <span className="text-[11px] text-muted-foreground">
+                      {message.length}/2000
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-auto">
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleOpenChange(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={submitFeedback} disabled={isSubmitting}>
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    {isSubmitting ? "Sending…" : "Send feedback"}
+                  </Button>
+                </div>
+              </>
             )}
           </div>
-        </div>
-      )}
-    </>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }
